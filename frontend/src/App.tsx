@@ -14,6 +14,7 @@ import UsuariosPage from "./pages/UsuariosPage";
 import AuditoriaPage from "./pages/AuditoriaPage";
 import BasesPage from "./pages/BasesPage";
 import MotoristasPage from "./pages/MotoristasPage";
+import ChecklistsPage from "./pages/ChecklistsPage";
 import BscPage from "./pages/BscPage";
 
 export default function App() {
@@ -49,6 +50,14 @@ export default function App() {
             element={
               <ProtectedRoute papeis={["superadmin", "admin"]}>
                 <AuditoriaPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="checklists"
+            element={
+              <ProtectedRoute papeis={["superadmin", "admin"]}>
+                <ChecklistsPage />
               </ProtectedRoute>
             }
           />

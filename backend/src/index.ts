@@ -13,6 +13,7 @@ import { auditRouter } from "./routes/audit.routes";
 import { driversRouter } from "./routes/drivers.routes";
 import { basesRouter } from "./routes/bases.routes";
 import { bscRouter } from "./routes/bsc.routes";
+import { checklistsRouter } from "./routes/checklists.routes";
 import { agendarSyncVec } from "./adapters/vecAdapter";
 
 const app = express();
@@ -34,6 +35,7 @@ app.use("/api/audit", auditRouter);
 app.use("/api/drivers", driversRouter);
 app.use("/api/bases", basesRouter);
 app.use("/api/bsc", bscRouter);
+app.use("/api/checklists", checklistsRouter);
 
 // Handler de erro central: nunca vaza stack trace nem detalhe de SQL ao cliente.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -6,6 +6,7 @@ const ITENS_MENU: { to: string; label: string; papeis?: string[] }[] = [
   { to: "/veiculos", label: "Veículos" },
   { to: "/manutencoes", label: "Manutenções" },
   { to: "/ocorrencias", label: "Ocorrências" },
+  { to: "/checklists", label: "Checklists", papeis: ["superadmin", "admin"] },
   { to: "/bsc", label: "BSC", papeis: ["superadmin", "admin"] },
   { to: "/bases", label: "Bases", papeis: ["superadmin", "admin"] },
   { to: "/motoristas", label: "Motoristas", papeis: ["superadmin", "admin"] },
