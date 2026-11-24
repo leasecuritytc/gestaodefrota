@@ -131,10 +131,20 @@ export async function syncVec(origem: "automatico" | "manual" = "manual"): Promi
         gravadosVeic++;
       }
 
+      // O checklist referencia o veículo por movil_id; resolvemos placa/SVC pela frota já lida.
+      const veicPorId = new Map<string, Record<string, unknown>>();
+      for (const v of veiculosVec) {
+        const vid = texto(campo(v, ["id"]));
+        if (vid) veicPorId.set(vid, v);
+      }
+
       for (const l of checklistsVec) {
         const id = texto(campo(l, ["id"]));
-        const placa = normalizarPlaca(campo(l, ["dominio", "unidad", "movil.dominio", "placa", "patente"]));
-        const quando = dataHora(campo(l, ["fecha", "fechaHora", "created_at"]));
+        const veic = veicPorId.get(texto(campo(l, ["movil_id"])) ?? "") ?? {};
+        const placa = normalizarPlaca(
+          campo(l, ["dominio", "movil.dominio", "placa", "patente"]) ?? campo(veic, ["dominio", "placa"])
+        );
+        const quando = dataHora(campo(l, ["fecha_fin", "fecha_inicio", "fecha", "fechaHora", "created_at"]));
         if (!id || !placa || !quando) {
           ignorados++;
           continue;
@@ -148,16 +158,17 @@ export async function syncVec(origem: "automatico" | "manual" = "manual"): Promi
              num_falhas = EXCLUDED.num_falhas, motorista = EXCLUDED.motorista, ingested_at = now()`,
           [
             placa,
-            texto(campo(l, ["descripcion", "tipoFormulario", "tipo_formulario.nombre"])) ?? "Checklist",
+            texto(campo(l, ["descripcion", "tipoFormulario", "tipo_formulario.nombre"])) ??
+              (campo(l, ["tipo_formulario_id"]) != null ? `Checklist (tipo ${texto(campo(l, ["tipo_formulario_id"]))})` : "Checklist"),
             quando,
-            texto(campo(l, ["unidad"])),
-            texto(campo(l, ["vin", "chasis"])),
-            texto(campo(l, ["usuario", "usuario.nombre"])),
+            texto(campo(veic, ["unidad"])),
+            texto(campo(veic, ["chasis_nro", "vin"])),
+            texto(campo(l, ["usuario", "usuario.nombre", "usuario_modificacion_id"])),
             Math.round(numero(campo(l, ["fallas", "cantidadFallas"])) ?? 0),
-            texto(campo(l, ["base", "base.nombre"])),
-            texto(campo(l, ["transportadora"])),
-            texto(campo(l, ["rentadora"])),
-            texto(campo(l, ["subRegion", "subregion"])),
+            texto(campo(veic, ["unidad", "base_nombre"])),
+            texto(campo(veic, ["transportadora_nombre", "transportadora"])),
+            texto(campo(veic, ["rentadora_nombre", "rentadora"])),
+            texto(campo(veic, ["subregion_nombre", "subRegion", "subregion"])),
             texto(campo(l, ["chofer", "chofer.nombre"])),
             id,
           ]
