@@ -185,6 +185,10 @@ export function linhasDe(resposta: unknown): Record<string, unknown>[] {
         if (dentro.length) return dentro;
       }
     }
+    // Envelope próprio do VEC: { moviles: [...], pagination } / { formularios: [...] } etc.
+    for (const v of Object.values(o)) {
+      if (Array.isArray(v) && v.length && typeof v[0] === "object") return v as Record<string, unknown>[];
+    }
   }
   return [];
 }
