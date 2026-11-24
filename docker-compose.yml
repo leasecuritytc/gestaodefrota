@@ -1,0 +1,53 @@
+version: "3.9"
+
+# Projeto isolado: rede própria, volume próprio, nenhuma porta de banco exposta
+# ao host. Só a API escuta em 127.0.0.1 (não em 0.0.0.0), e só o Nginx do
+# sistema (fora destes containers) fala com a internet.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: gdf_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - gdf_db_data:/var/lib/postgresql/data
+      - ./backend/src/db/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - gdf_net
+    # Sem "ports": o banco só é alcançável pelo container "api", nunca pelo host.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    container_name: gdf_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      # Só acessível a partir da própria VPS (o Nginx do host faz o proxy).
+      - "127.0.0.1:4001:4000"
+    networks:
+      - gdf_net
+
+networks:
+  gdf_net:
+    driver: bridge
+
+volumes:
+  gdf_db_data:
