@@ -55,10 +55,19 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Camada escura leve, mais forte só à esquerda (onde fica o card), para a
+     imagem RodaCoop — logo, vans, "LÍDER DE FROTA" — aparecer de verdade. */
   background:
-    linear-gradient(180deg, rgba(11, 31, 58, 0.82), rgba(11, 31, 58, 0.93)),
-    url("/fundo-rodacoop.jpg") center/cover no-repeat fixed;
+    linear-gradient(90deg, rgba(11, 31, 58, 0.7) 0%, rgba(11, 31, 58, 0.25) 55%, rgba(11, 31, 58, 0.05) 100%),
+    url("/fundo-rodacoop.jpg") center/cover no-repeat;
   padding: 20px;
+}
+
+@media (min-width: 900px) {
+  .auth-shell {
+    justify-content: flex-start;
+    padding-left: 7vw;
+  }
 }
 
 .auth-card {
@@ -283,7 +292,7 @@ textarea {
 
 .area-conteudo-fundo {
   background:
-    linear-gradient(180deg, rgba(11, 31, 58, 0.45), rgba(11, 31, 58, 0.7)),
+    linear-gradient(180deg, rgba(11, 31, 58, 0.25), rgba(11, 31, 58, 0.45)),
     url("/fundo-rodacoop.jpg") center/cover no-repeat fixed;
 }
 
