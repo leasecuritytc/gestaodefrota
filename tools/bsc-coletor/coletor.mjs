@@ -120,10 +120,23 @@ async function coletar() {
   const page = ctx.pages()[0] ?? (await ctx.newPage());
   let falhas = 0;
   try {
-    await page.goto(BSC_URL, { waitUntil: "networkidle", timeout: 90000 });
-    if (/accounts\.google\.com/.test(page.url()) || (await page.getByText("Não é possível acessar o relatório").count())) {
+    // O Looker Studio nunca fica "ocioso" na rede (atualiza o tempo todo): não usar networkidle aqui.
+    await page.goto(BSC_URL, { waitUntil: "domcontentloaded", timeout: 90000 });
+    const menu = page.getByText(PAGINAS[0], { exact: true }).first();
+    const bloqueio = page.getByText("Não é possível acessar o relatório").first();
+    const resultado = await Promise.race([
+      menu.waitFor({ state: "attached", timeout: 120000 }).then(() => "ok"),
+      bloqueio.waitFor({ state: "attached", timeout: 120000 }).then(() => "bloqueado"),
+      page.waitForURL(/accounts\.google\.com/, { timeout: 120000 }).then(() => "login"),
+    ]).catch(() => "timeout");
+    if (resultado === "login" || resultado === "bloqueado") {
       throw new Error("Sessão do Google expirada ou conta sem acesso. Rode: npm run login");
     }
+    if (resultado === "timeout") {
+      await page.screenshot({ path: path.join(dir, `erro-abertura-${Date.now()}.png`) }).catch(() => undefined);
+      throw new Error("O relatório não carregou em 2 minutos (veja o erro-abertura-*.png). Tente de novo.");
+    }
+    await page.waitForTimeout(4000);
     for (const nome of PAGINAS) {
       try {
         // O menu do Looker é um carrossel: itens fora da área visível não aceitam clique normal.
