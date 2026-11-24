@@ -48,10 +48,16 @@ async function main() {
     // que precisa de privilégio para a RLS liberar o INSERT, não o papel do
     // usuário sendo criado — os dois são coisas diferentes.
     await client.query("SELECT set_config('app.role', 'superadmin', true)");
+    // email_confirmado/ativado_em = true/agora: este é o único caminho que
+    // define senha diretamente (o bootstrap não tem quem o convide); sem
+    // isso, GET /api/users mostraria o superadmin como "não ativado" e
+    // POST /api/users/:id/reenviar-convite pareceria fazer sentido para ele
+    // (não faz — ver 011_convite_e_recuperacao_senha.sql).
     await client.query(
-      `INSERT INTO users (email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role`,
+      `INSERT INTO users (email, password_hash, full_name, role, email_confirmado, ativado_em)
+       VALUES ($1, $2, $3, $4, true, now())
+       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role,
+         email_confirmado = true, ativado_em = COALESCE(users.ativado_em, now())`,
       [email, hash, fullName, role]
     );
     await client.query("COMMIT");

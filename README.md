@@ -148,6 +148,11 @@ docker compose exec \
 **Erro comum:** senha com menos de 12 caracteres é recusada de propósito
 pelo script. Use uma senha forte de verdade, não um teste.
 
+Este é o **único** caso em que alguém define a senha de outro usuário
+diretamente — é o próprio bootstrap, não tem quem convide o primeiro
+superadmin. A partir daqui, todo outro usuário (o admin que você for
+indicar, gestores, motoristas) é criado por convite — ver próxima seção.
+
 ### 6. Configurar o Nginx e o domínio
 
 ```bash
@@ -184,6 +189,83 @@ curl https://alexander-log.com.br/api/health
 
 **Erro comum:** se o certbot falhar dizendo que não alcançou o domínio, o
 DNS ainda não propagou — espere e tente de novo.
+
+## Cadastro de usuários e recuperação de senha
+
+A regra completa e o porquê de cada decisão estão em
+[`docs/cadastro-e-recuperacao-senha.md`](docs/cadastro-e-recuperacao-senha.md).
+Resumo prático:
+
+- **Só superadmin cria admin** (ou outro superadmin). Admin cria
+  gestor_base, leitor e motorista.
+- **Ninguém define a senha de outro usuário** (exceto o bootstrap do
+  primeiro superadmin, passo anterior). Criar um usuário gera um **link de
+  ativação de uso único** — a pessoa convidada define a própria senha ao
+  abrir o link.
+
+**Cadastrar o admin que você for indicar** (autenticado como superadmin):
+```json
+POST /api/users
+{ "email": "email-que-voce-vai-indicar@rodacoop.com.br", "full_name": "Nome do Admin", "role": "admin" }
+```
+Resposta inclui `convite.link` (válido por 7 dias) — mande esse link para a
+pessoa (por enquanto manualmente, até configurar o envio automático por
+e-mail, logo abaixo). `convite.email_enviado` diz se o e-mail já saiu
+sozinho.
+
+**A pessoa ativa a própria conta:**
+```json
+POST /api/auth/ativar-conta
+{ "token": "token-que-veio-no-link", "password": "senha-forte-escolhida-por-ela", "email_recuperacao": "opcional@exemplo.com" }
+```
+Resposta já vem com um token de login (`login_automatico: true`) — não
+precisa logar de novo em seguida.
+
+**Esqueceu a senha:**
+```json
+POST /api/auth/esqueci-senha
+{ "email": "email-de-login-ou-de-recuperacao" }
+```
+Sempre responde a mesma mensagem genérica (não revela se o e-mail existe).
+Se existir conta ativa, chega um link por e-mail (válido por 1 hora):
+```json
+POST /api/auth/redefinir-senha
+{ "token": "token-que-veio-no-link", "password": "nova-senha" }
+```
+
+**Convite expirou ou e-mail não chegou:**
+```
+POST /api/users/:id/reenviar-convite
+```
+(só funciona se a pessoa ainda não ativou — depois disso o caminho é
+"esqueci minha senha", não reenviar convite.)
+
+**Erro comum:** link de ativação/redefinição dando "inválido, já usado ou
+expirado" — cada link só funciona uma vez; se a pessoa clicou duas vezes ou
+demorou demais, gere outro (`reenviar-convite` ou `esqueci-senha`).
+
+### Ativando o envio de e-mail
+
+Sem isso configurado, os links de convite/redefinição continuam
+funcionando — só que você precisa repassá-los manualmente (o link do
+convite vem na resposta da API; o de redefinição de senha aparece no log
+do servidor, `docker compose logs -f api`, nunca na resposta pública).
+
+1. Use uma conta SMTP (Gmail/Workspace com "senha de app", SendGrid,
+   Mailgun, Amazon SES, ou o SMTP do seu provedor de e-mail).
+2. Preencher no `.env`:
+   ```bash
+   SMTP_HOST=smtp.exemplo.com
+   SMTP_PORT=587
+   SMTP_USER=seu-usuario-smtp
+   SMTP_PASSWORD=sua-senha-smtp
+   SMTP_FROM=naoresponda@alexander-log.com.br
+   ```
+3. Reiniciar a API: `docker compose up -d --build api`.
+
+**Erro comum:** usar a senha normal do Gmail em vez de uma "senha de app"
+— contas Google com verificação em duas etapas recusam a senha normal para
+SMTP; gere uma senha de app específica em myaccount.google.com/apppasswords.
 
 ## Papel motorista e ocorrências de campo
 

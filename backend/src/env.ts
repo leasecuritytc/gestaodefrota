@@ -36,4 +36,17 @@ export const env = {
     // o e-mail da service account.
     serviceAccountJson: process.env.GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON ?? "",
   },
+  smtp: {
+    host: process.env.SMTP_HOST ?? "",
+    port: Number(process.env.SMTP_PORT ?? 587),
+    user: process.env.SMTP_USER ?? "",
+    password: process.env.SMTP_PASSWORD ?? "",
+    from: process.env.SMTP_FROM ?? "",
+  },
+  // Usada para montar o link de convite/redefinição de senha
+  // (ex.: https://alexander-log.com.br/ativar-conta?token=...). Enquanto o
+  // frontend não existir, o link não abre nada sozinho — mas o token nele
+  // continua válido para ativar a conta via chamada direta à API (ver
+  // README, seção "Cadastro de usuários e recuperação de senha").
+  frontendBaseUrl: process.env.FRONTEND_BASE_URL ?? "https://alexander-log.com.br",
 };

@@ -1,26 +1,38 @@
 import { Router } from "express";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { withRole, AppRole } from "../db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { registrarAuditoria } from "../audit";
+import { gerarToken } from "../tokens";
+import { enviarEmail, linkConvite } from "../email";
+
+const CONVITE_VALIDADE_DIAS = 7;
 
 export const usersRouter = Router();
 usersRouter.use(requireAuth, requireRole("superadmin", "admin"));
 
 usersRouter.get("/", async (req, res) => {
   const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
-    c.query(`SELECT id, email, full_name, role, active, created_at FROM users ORDER BY created_at`)
+    c.query(
+      `SELECT id, email, full_name, role, active, email_confirmado, ativado_em, acesso_auditoria, created_at
+       FROM users ORDER BY created_at`
+    )
   );
   res.json(rows.rows);
 });
 
 const ALL_ROLES = ["superadmin", "admin", "gestor_base", "leitor", "motorista"] as const;
 
+// Sem campo de senha: quem cria o usuário NUNCA define a senha dele — a
+// pessoa convidada é quem escolhe, ao abrir o link de ativação (ver
+// POST /api/auth/ativar-conta). Isso evita que uma senha inicial circule
+// por e-mail/WhatsApp em texto puro, e também evita que o criador "saiba"
+// a senha de quem ele cadastrou.
 const createSchema = z
   .object({
     email: z.string().email(),
-    password: z.string().min(12),
     full_name: z.string().min(1),
     role: z.enum(ALL_ROLES),
     // Só usados quando role === 'motorista':
@@ -54,14 +66,19 @@ usersRouter.post("/", async (req, res) => {
       .json({ error: `Seu papel (${req.auth!.role}) não pode criar usuários com papel '${u.role}'.` });
   }
 
-  const hash = await bcrypt.hash(u.password, 12);
+  // Senha-placeholder: um hash de um valor aleatório que ninguém nunca vai
+  // digitar — o login (auth.routes.ts) compara com bcrypt normalmente, e
+  // como a senha real é outra coisa completamente diferente, a comparação
+  // SEMPRE falha até a pessoa ativar a conta e definir a senha de verdade.
+  // Mais simples e mais seguro do que permitir password_hash nulo no banco.
+  const senhaPlaceholder = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 12);
   try {
     const result = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
       const userRow = await c.query(
         `INSERT INTO users (email, password_hash, full_name, role)
          VALUES ($1,$2,$3,$4)
          RETURNING id, email, full_name, role, active, created_at`,
-        [u.email, hash, u.full_name, u.role]
+        [u.email, senhaPlaceholder, u.full_name, u.role]
       );
       const user = userRow.rows[0];
 
@@ -95,6 +112,18 @@ usersRouter.post("/", async (req, res) => {
         }
       }
 
+      // Convite de ativação: token de uso único, válido por
+      // CONVITE_VALIDADE_DIAS. Só o hash vai pro banco (ver tokens.ts) —
+      // o token "cru" só existe aqui, pra montar o link.
+      const { token, hash: tokenHash } = gerarToken();
+      const expiraEm = new Date(Date.now() + CONVITE_VALIDADE_DIAS * 24 * 60 * 60 * 1000);
+      await c.query(`SELECT criar_token_usuario($1, 'convite', $2, $3)`, [
+        user.id,
+        tokenHash,
+        expiraEm.toISOString(),
+      ]);
+      const link = linkConvite(token);
+
       await registrarAuditoria(c, req.auth!.sub, "criar_usuario", "users", user.id, {
         email: user.email,
         full_name: user.full_name,
@@ -102,15 +131,97 @@ usersRouter.post("/", async (req, res) => {
         placa_atual: u.placa_atual ?? null,
       });
 
-      return user;
+      return { user, link, expiraEm };
     });
-    res.status(201).json(result);
+
+    // E-mail enviado FORA da transação acima: se o envio falhar, o usuário
+    // e o convite já foram criados de verdade — não queremos desfazer o
+    // cadastro só porque o SMTP engasgou. Por isso o link também volta na
+    // resposta (quem está criando o usuário pode repassar na mão).
+    const emailResultado = await enviarEmail(
+      result.user.email,
+      "Você foi convidado para a plataforma GESTÃO DE FROTA",
+      `Olá, ${result.user.full_name}. Para ativar sua conta e definir sua senha, acesse: ${result.link}\n` +
+        `Este link expira em ${CONVITE_VALIDADE_DIAS} dias.`,
+      `<p>Olá, ${result.user.full_name}.</p>` +
+        `<p>Para ativar sua conta e definir sua senha, acesse o link abaixo:</p>` +
+        `<p><a href="${result.link}">${result.link}</a></p>` +
+        `<p>Este link expira em ${CONVITE_VALIDADE_DIAS} dias.</p>`
+    );
+
+    res.status(201).json({
+      ...result.user,
+      convite: {
+        link: result.link,
+        expira_em: result.expiraEm,
+        email_enviado: emailResultado.enviado,
+        ...(emailResultado.enviado ? {} : { aviso: emailResultado.motivo }),
+      },
+    });
   } catch (err: any) {
     if (err.code === "23505") {
       return res.status(409).json({ error: "Já existe um usuário com esse e-mail." });
     }
     if (err.httpStatus === 400) {
       return res.status(400).json({ error: err.message });
+    }
+    throw err;
+  }
+});
+
+// POST /api/users/:id/reenviar-convite — gera um novo link de ativação
+// (ex.: o anterior expirou, ou o e-mail nunca chegou). Só faz sentido para
+// quem ainda não ativou a conta — depois disso, o caminho certo é
+// "esqueci minha senha" (POST /api/auth/esqueci-senha), não reenviar
+// convite.
+usersRouter.post("/:id/reenviar-convite", async (req, res) => {
+  try {
+    const result = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+      const userRow = await c.query(
+        `SELECT id, email, full_name, ativado_em FROM users WHERE id = $1`,
+        [req.params.id]
+      );
+      const user = userRow.rows[0];
+      if (!user) {
+        throw Object.assign(new Error("Usuário não encontrado."), { httpStatus: 404 });
+      }
+      if (user.ativado_em) {
+        throw Object.assign(
+          new Error(
+            "Este usuário já ativou a conta. Para ele recuperar acesso, use 'esqueci minha senha' (POST /api/auth/esqueci-senha), não reenviar convite."
+          ),
+          { httpStatus: 400 }
+        );
+      }
+      const { token, hash: tokenHash } = gerarToken();
+      const expiraEm = new Date(Date.now() + CONVITE_VALIDADE_DIAS * 24 * 60 * 60 * 1000);
+      await c.query(`SELECT criar_token_usuario($1, 'convite', $2, $3)`, [
+        user.id,
+        tokenHash,
+        expiraEm.toISOString(),
+      ]);
+      const link = linkConvite(token);
+      await registrarAuditoria(c, req.auth!.sub, "reenviar_convite", "users", user.id, {
+        email: user.email,
+      });
+      return { user, link, expiraEm };
+    });
+
+    const emailResultado = await enviarEmail(
+      result.user.email,
+      "Novo link de ativação — GESTÃO DE FROTA",
+      `Acesse para ativar sua conta: ${result.link}\nEste link expira em ${CONVITE_VALIDADE_DIAS} dias.`,
+      `<p><a href="${result.link}">${result.link}</a></p><p>Expira em ${CONVITE_VALIDADE_DIAS} dias.</p>`
+    );
+    res.json({
+      link: result.link,
+      expira_em: result.expiraEm,
+      email_enviado: emailResultado.enviado,
+      ...(emailResultado.enviado ? {} : { aviso: emailResultado.motivo }),
+    });
+  } catch (err: any) {
+    if (err.httpStatus) {
+      return res.status(err.httpStatus).json({ error: err.message });
     }
     throw err;
   }
