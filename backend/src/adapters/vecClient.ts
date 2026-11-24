@@ -86,37 +86,71 @@ export async function autenticar(forcar = false): Promise<void> {
     return;
   }
 
-  const variantes: Record<string, string>[] = [
-    { usuario: env.vec.usuario, password: env.vec.senha },
-    { username: env.vec.usuario, password: env.vec.senha },
-    { email: env.vec.usuario, password: env.vec.senha },
+  // O portal não documenta o formato do login. Testamos formatos comuns
+  // (JSON e formulário, nomes de campo em pt/es/en). Regras de parada,
+  // para nunca arriscar bloqueio da conta:
+  //   - 2xx com token → sucesso
+  //   - 400/401/403/422 → o servidor ENTENDEU o formato e avaliou a senha:
+  //     para na hora e informa (não tenta outro formato)
+  //   - 500 → o servidor nem chegou a avaliar a senha (formato errado):
+  //     tenta o próximo formato
+  const u = env.vec.usuario;
+  const p = env.vec.senha;
+  const corpos: Record<string, string>[] = [
+    { usuario: u, password: p },
+    { usuario: u, clave: p },
+    { username: u, password: p },
+    { email: u, password: p },
+    { user: u, password: p },
+    { login: u, password: p },
+    { usuario: u, contrasena: p },
   ];
 
-  const statusVistos: number[] = [];
-  for (const corpo of variantes) {
-    const r = await fetch(url("public/auth/login"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(corpo),
-    });
-    statusVistos.push(r.status);
-    if (!r.ok) continue;
-    let json: unknown = null;
-    try {
-      json = await r.json();
-    } catch {
-      continue;
+  const redigir = (t: string) =>
+    t.split(p).join("***").split(u).join("<usuario>").replace(/\s+/g, " ").slice(0, 220);
+
+  const diagnostico: string[] = [];
+  for (const formato of ["json", "form"] as const) {
+    for (const corpo of corpos) {
+      const nomes = Object.keys(corpo).join("+");
+      const r = await fetch(url("public/auth/login"), {
+        method: "POST",
+        headers:
+          formato === "json"
+            ? { "Content-Type": "application/json", Accept: "application/json" }
+            : { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: formato === "json" ? JSON.stringify(corpo) : new URLSearchParams(corpo).toString(),
+      });
+      const bruto = await r.text();
+
+      if (r.ok) {
+        let json: unknown = null;
+        try {
+          json = JSON.parse(bruto);
+        } catch {
+          /* resposta não-JSON */
+        }
+        const token = extrairToken(json);
+        if (token) {
+          tokenAtual = token;
+          cabecalhoAtual = await escolherCabecalho(token);
+          return;
+        }
+        const chaves = json && typeof json === "object" ? Object.keys(json as object).join(",") : "não-JSON";
+        diagnostico.push(`${formato}/${nomes}: ${r.status} sem token (chaves: ${chaves})`);
+        continue;
+      }
+
+      if ([400, 401, 403, 422].includes(r.status)) {
+        throw new Error(
+          `VEC: o portal recusou o login (HTTP ${r.status}, formato ${formato}/${nomes}). ` +
+            `Resposta: "${redigir(bruto)}". Provável usuário/senha incorreto ou conta só com login Okta.`
+        );
+      }
+      diagnostico.push(`${formato}/${nomes}: ${r.status} "${redigir(bruto).slice(0, 90)}"`);
     }
-    const token = extrairToken(json);
-    if (!token) continue;
-    tokenAtual = token;
-    cabecalhoAtual = await escolherCabecalho(token);
-    return;
   }
-  throw new Error(
-    `VEC: login recusado (status HTTP: ${statusVistos.join(", ")}). ` +
-      "Confira VEC_USUARIO/VEC_SENHA no .env (o mesmo login do portal)."
-  );
+  throw new Error(`VEC: nenhum formato de login aceito. Tentativas: ${diagnostico.join(" | ")}`);
 }
 
 /** GET autenticado, com 1 novo login automático se o token expirar. */
