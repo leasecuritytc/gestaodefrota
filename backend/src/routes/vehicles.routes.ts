@@ -26,7 +26,7 @@ vehiclesRouter.get("/", async (req, res) => {
 
 // Frota completa como a VEC enxerga (todas as bases da RodaCoop), com
 // indicação de quais placas já estão cadastradas aqui.
-vehiclesRouter.get("/vec", async (req, res) => {
+vehiclesRouter.get("/vec", requireRole("superadmin", "admin"), async (req, res) => {
   const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT vv.placa, vv.estado, vv.utilizacao, vv.modelo, vv.tipo, vv.regiao, vv.subregiao, vv.svc,

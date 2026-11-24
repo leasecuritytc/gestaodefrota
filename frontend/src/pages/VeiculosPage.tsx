@@ -96,8 +96,8 @@ export default function VeiculosPage() {
   const [msgSync, setMsgSync] = useState<string | null>(null);
 
   function carregarVec() {
-    api.get<VeiculoVec[]>("/vehicles/vec").then((r) => setFrotaVec(r.data)).catch(() => setFrotaVec([]));
     if (podeEditar) {
+      api.get<VeiculoVec[]>("/vehicles/vec").then((r) => setFrotaVec(r.data)).catch(() => setFrotaVec([]));
       api.get<StatusVec>("/sync/vec/status").then((r) => setStatusVec(r.data)).catch(() => undefined);
     }
   }
@@ -240,6 +240,7 @@ export default function VeiculosPage() {
         </div>
       )}
 
+      {podeEditar && (
       <div className="abas">
         <button className={aba === "base" ? "ativo" : ""} onClick={() => setAba("base")}>
           Frota cadastrada
@@ -248,8 +249,9 @@ export default function VeiculosPage() {
           Frota na VEC {frotaVec && frotaVec.length > 0 ? `(${frotaVec.length})` : ""}
         </button>
       </div>
+      )}
 
-      {aba === "vec" && (
+      {podeEditar && aba === "vec" && (
         <div className="painel">
           <div className="barra-topo">
             <div className="filtros">
@@ -330,9 +332,9 @@ export default function VeiculosPage() {
                 <th>Status</th>
                 <th>Rentadora</th>
                 <th>Motorista atual</th>
-                <th>Estado VEC</th>
-                <th>Km</th>
-                <th>Último BIP</th>
+                {podeEditar && <th>Estado VEC</th>}
+                {podeEditar && <th>Km</th>}
+                {podeEditar && <th>Último BIP</th>}
                 <th>Observações</th>
                 {(podeTrocarMotorista || podeEditar) && <th></th>}
               </tr>
@@ -349,9 +351,9 @@ export default function VeiculosPage() {
                   </td>
                   <td>{v.rentadora ?? "—"}</td>
                   <td>{v.motorista_nome ?? "Sem cooperado"}</td>
-                  <td>{v.vec_estado ? <span className={tagVec(v.vec_estado)}>{v.vec_estado}</span> : "—"}</td>
-                  <td>{fmtKm(v.vec_km)}</td>
-                  <td>{fmtData(v.vec_ultimo_bip)}</td>
+                  {podeEditar && <td>{v.vec_estado ? <span className={tagVec(v.vec_estado)}>{v.vec_estado}</span> : "—"}</td>}
+                  {podeEditar && <td>{fmtKm(v.vec_km)}</td>}
+                  {podeEditar && <td>{fmtData(v.vec_ultimo_bip)}</td>}
                   <td>{v.observacoes ?? "—"}</td>
                   {(podeTrocarMotorista || podeEditar) && (
                     <td style={{ display: "flex", gap: 6 }}>
