@@ -66,6 +66,9 @@ export default function BscPage() {
                   ))}
                 </div>
               )}
+              {pagina.linhas.filter((l) => /^(Tabela \d+|Atualização|Coletado)/.test(l)).map((l, i) => (
+                <p className="subtitulo" key={`n${i}`}>{l}</p>
+              ))}
               {pagina.tabelas.map((t, i) => (
                 <div className="bsc-tabela-wrap" key={i}>
                   <table>

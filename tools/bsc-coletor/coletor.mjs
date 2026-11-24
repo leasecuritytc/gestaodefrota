@@ -56,34 +56,104 @@ async function login() {
   await new Promise((r) => ctx.on("close", r));
 }
 
+// Texto da página FORA das tabelas (indicadores, títulos, avisos), um bloco por linha.
 async function extrair(page) {
   return page.evaluate(() => {
-    const visivel = (el) => {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
-    };
-    const texto = (el) => (el.innerText || "").replace(/\s+/g, " ").trim();
     const linhas = [];
     const vistos = new Set();
-    for (const l of (document.body.innerText || "").split("\n")) {
-      const t = l.replace(/\s+/g, " ").trim();
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const el = n.parentElement;
+      if (!el || el.closest("upgraded-table") || ["SCRIPT", "STYLE", "NOSCRIPT"].includes(el.tagName)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      const t = (n.textContent || "").replace(/\s+/g, " ").trim();
       if (t && t.length < 2000 && !vistos.has(t)) {
         vistos.add(t);
         linhas.push(t);
       }
     }
-    const tabelas = [];
-    for (const tb of document.querySelectorAll("table, [role=table], [role=grid]")) {
-      if (!visivel(tb)) continue;
-      const linhasT = [];
-      for (const tr of tb.querySelectorAll("tr, [role=row]")) {
-        const cels = [...tr.querySelectorAll("th, td, [role=columnheader], [role=gridcell], [role=cell]")].map(texto);
-        if (cels.some(Boolean)) linhasT.push(cels);
-      }
-      if (linhasT.length > 1) tabelas.push(linhasT);
-    }
-    return { linhas, tabelas };
+    return { linhas, tabelas: [] };
   });
+}
+
+// Tabelas do Looker (<upgraded-table>): só ~12 linhas ficam no DOM por vez (virtualização).
+// Rolamos a tabela com a roda do mouse e juntamos as linhas pelo índice; depois avançamos a página.
+const MAX_LINHAS_TABELA = Number(process.env.BSC_MAX_LINHAS_TABELA || 800);
+
+function limparCabecalho(t) {
+  return t.replace(/[▲▼]/g, "").replace(/\s+/g, " ").trim().replace(/\s+\d+$/, "");
+}
+
+async function extrairTabelasLooker(page) {
+  const tabelas = [];
+  const notas = [];
+  const total = await page.locator("upgraded-table").count();
+  for (let i = 0; i < total; i++) {
+    const t = page.locator("upgraded-table").nth(i);
+    try {
+      if (!(await t.isVisible())) continue;
+      await t.scrollIntoViewIfNeeded().catch(() => undefined);
+      const cab = await t.evaluate((el) =>
+        [...el.querySelectorAll(".centerHeaderRow > *")].map((c) => (c.innerText || "").trim()).filter(Boolean)
+      );
+      const cabecalho = cab.map(limparCabecalho);
+      const lerLinhas = () =>
+        t.evaluate((el) =>
+          [...el.querySelectorAll(".centerColsContainer .row")].map((r) => ({
+            k: (r.className.match(/block-\d+/) || [""])[0] + (r.className.match(/index-\d+/) || [""])[0],
+            cels: [...r.querySelectorAll(".cell-value")].map((c) => (c.innerText || "").replace(/\s+/g, " ").trim()),
+          }))
+        );
+      const rotuloPagina = () => t.locator(".pageLabel").first().innerText().catch(() => "");
+      const parse = (x) => {
+        const m = x.match(/(\d+)\s*-\s*(\d+)\s*\/\s*(\d+)/);
+        return m ? { ini: +m[1], fim: +m[2], tot: +m[3] } : null;
+      };
+
+      const todas = [];
+      let totalReal = 0;
+      for (let pg = 0; pg < 400 && todas.length < MAX_LINHAS_TABELA; pg++) {
+        const info = parse(await rotuloPagina());
+        if (info) totalReal = info.tot;
+        const esperadas = info ? info.fim - info.ini + 1 : 0;
+        const mapa = new Map();
+        const corpo = t.locator(".tableBody").first();
+        await corpo.hover({ timeout: 5000 }).catch(() => undefined);
+        await page.mouse.wheel(0, -100000);
+        await page.waitForTimeout(400);
+        let semNovas = 0;
+        for (let passo = 0; passo < 60; passo++) {
+          const antes = mapa.size;
+          for (const l of await lerLinhas()) if (l.k && l.cels.length) mapa.set(l.k, l.cels);
+          if (esperadas && mapa.size >= esperadas) break;
+          semNovas = mapa.size === antes ? semNovas + 1 : 0;
+          if (semNovas >= 3) break;
+          await page.mouse.wheel(0, 260);
+          await page.waitForTimeout(250);
+        }
+        const ordenadas = [...mapa.entries()]
+          .sort((a, b) => Number((a[0].match(/index-(\d+)/) || [0, 0])[1]) - Number((b[0].match(/index-(\d+)/) || [0, 0])[1]))
+          .map((e) => e[1]);
+        todas.push(...ordenadas);
+        const prox = t.locator(".pageForward").first();
+        const desabilitado = (await prox.count()) === 0 || /disabled/.test((await prox.getAttribute("class")) || "");
+        if (desabilitado) break;
+        await prox.click({ timeout: 5000 }).catch(() => undefined);
+        await page.waitForTimeout(1500);
+      }
+      if (todas.length) {
+        const largura = Math.max(...todas.slice(0, 20).map((r) => r.length));
+        const cabOk = cabecalho.length === largura ? cabecalho : Array.from({ length: largura }, (_, c) => cabecalho[c] || `Coluna ${c + 1}`);
+        tabelas.push([cabOk, ...todas.slice(0, MAX_LINHAS_TABELA)]);
+        const gravadas = Math.min(todas.length, MAX_LINHAS_TABELA);
+        notas.push(`Tabela ${tabelas.length} (${cabOk.slice(0, 4).join(", ")}…): ${gravadas} de ${totalReal || "?"} linhas${gravadas < (totalReal || 0) ? " (amostra)" : ""}`);
+      }
+    } catch (e) {
+      notas.push(`Tabela ${i + 1}: não foi possível ler (${String(e.message).split("\n")[0]})`);
+    }
+  }
+  return { tabelas, notas };
 }
 
 function detectarNumeros(linhas) {
@@ -148,6 +218,9 @@ async function coletarTela(page, rotulo) {
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
   await page.waitForTimeout(6000); // gráficos do Looker renderizam depois do load
   const dados = await extrair(page);
+  const { tabelas, notas } = await extrairTabelasLooker(page);
+  dados.tabelas = tabelas;
+  dados.linhas.push(...notas);
   const r = await enviar(rotulo, dados);
   console.log(`OK  ${rotulo}: ${r.linhas.length} linhas, ${r.tabelas.length} tabelas, ${r.numeros.length} números → ${r.resposta}`);
 }
