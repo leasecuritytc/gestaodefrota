@@ -97,8 +97,10 @@ export async function autenticar(forcar = false): Promise<void> {
   const u = env.vec.usuario;
   const p = env.vec.senha;
   const corpos: Record<string, string>[] = [
-    { usuario: u, password: p },
+    // Formato confirmado no portal em 24/11/2026 (JSON usuario+clave) vem
+    // primeiro; os demais ficam como reserva caso o portal mude.
     { usuario: u, clave: p },
+    { usuario: u, password: p },
     { username: u, password: p },
     { email: u, password: p },
     { user: u, password: p },

@@ -189,11 +189,18 @@ export async function syncVecChecklist() {
 /** Agenda a sincronização automática (chamado no start da API). */
 export function agendarSyncVec(): void {
   if (!isVecConfigurado() || env.vec.intervaloMin <= 0) return;
-  const rodar = () =>
-    syncVec("automatico").then((r) => {
+  // Se o portal recusar a senha, para as tentativas automáticas até a API
+  // reiniciar (o que acontece ao atualizar o .env) — evita bloquear a conta
+  // com uma tentativa errada a cada 2 horas.
+  let pausadoPorLoginRecusado = false;
+  const rodar = () => {
+    if (pausadoPorLoginRecusado) return;
+    return syncVec("automatico").then((r) => {
+      if (r.erro?.includes("recusou o login")) pausadoPorLoginRecusado = true;
       // eslint-disable-next-line no-console
       console.log(`[VEC] sync automático: ok=${r.ok} veiculos=${r.veiculos} checklists=${r.checklists}${r.erro ? " erro=" + r.erro : ""}`);
     });
+  };
   setTimeout(rodar, 30_000); // 30s após subir, para não atrasar o boot
   setInterval(rodar, env.vec.intervaloMin * 60_000);
 }
