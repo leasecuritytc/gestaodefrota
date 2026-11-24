@@ -32,13 +32,17 @@ entre eles.
   geram nenhum dado até existir credencial oficial de API — eles respondem
   explicando o que falta, em vez de simular.
 
-## Achado importante sobre os dados herdados
+## Achado resolvido: "42 veículos" é uma base, não a frota nacional
 
-O painel atual mostra "42 veículos", mas os snapshots reais trazem **bases
-inteiras fora desse total** (SMG9 com 322, SMG6 com 302, SMG11 com 10),
-somando centenas de veículos. O "42" parece ser um filtro de frota/base
-específico, não o total da operação. Confirme isso antes de usar esse número
-em qualquer apresentação.
+O painel atual mostra "42 veículos". A planilha de campo real da base SMG3
+(Pouso Alegre/MG) + SMG5 (Frota Locada), importada nas migrations `007` e
+`008`, confirma: **42 é exatamente o total dessas duas bases** (38 + 4). O
+"600+" vem da soma de todas as bases do país nos snapshots legados (SMG9 com
+322, SMG11 com 10, SGO1, SRS10 etc.). Os dois números estavam certos — um é
+uma base, o outro é a frota inteira. Detalhes em
+[`docs/base-smg3-pouso-alegre.md`](docs/base-smg3-pouso-alegre.md). Para a
+apresentação à RodaCoop, o dashboard deve sempre dizer qual recorte está
+mostrando (base específica vs. total nacional), nunca um número solto.
 
 ## Estrutura
 
@@ -48,6 +52,14 @@ backend/            API (Node.js + TypeScript + Express + PostgreSQL)
   src/adapters/      Pontes para VEC e BSC/Mercado Livre (hoje desativadas)
   src/routes/        Rotas HTTP
 nginx/               Bloco Nginx pronto para este domínio
+docs/                Documentação do projeto
+  base-smg3-pouso-alegre.md  Análise da planilha de campo real (base SMG3/SMG5)
+  fontes/            Arquivos originais recebidos (planilhas etc.), nunca editados —
+                      preservados para auditoria, igual ao padrão de rastreabilidade
+                      do banco (colunas source/source_id)
+assets/              Identidade visual da plataforma (não é código nem dado de banco)
+  images/            Imagens de fundo, banners, fotos de referência
+  icons/             Ícones e logo oficial (reservado — ainda sem arquivo)
 docker-compose.yml   Orquestração isolada (rede e volume próprios)
 .env.example         Modelo de variáveis — copiar para .env e preencher
 ```
