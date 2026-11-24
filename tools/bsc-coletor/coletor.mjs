@@ -126,7 +126,14 @@ async function coletar() {
     }
     for (const nome of PAGINAS) {
       try {
-        await page.getByText(nome, { exact: true }).first().click({ timeout: 15000 });
+        // O menu do Looker é um carrossel: itens fora da área visível não aceitam clique normal.
+        const item = page.getByText(nome, { exact: true });
+        const visivel = item.locator("visible=true").first();
+        if (await visivel.count()) {
+          await visivel.click({ timeout: 15000 });
+        } else {
+          await item.first().dispatchEvent("click", {}, { timeout: 15000 });
+        }
         await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => undefined);
         await page.waitForTimeout(6000); // gráficos do Looker renderizam depois do load
         const dados = await extrair(page);
