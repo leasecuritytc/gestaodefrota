@@ -10,8 +10,12 @@ vehiclesRouter.use(requireAuth);
 vehiclesRouter.get("/", async (req, res) => {
   const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
-      `SELECT id, placa, chassi, base, tipo, rentadora, transportadora, subregiao, status
-       FROM vehicles ORDER BY base, placa`
+      `SELECT v.id, v.placa, v.chassi, v.base, v.tipo, v.rentadora, v.transportadora,
+              v.subregiao, v.status, v.observacoes, v.motorista_atual_id,
+              d.nome AS motorista_nome
+       FROM vehicles v
+       LEFT JOIN drivers d ON d.id = v.motorista_atual_id
+       ORDER BY v.base, v.placa`
     )
   );
   res.json(rows.rows);

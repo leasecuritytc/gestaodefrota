@@ -11,11 +11,13 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${APP_DB_USER}";
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${APP_DB_USER}";
   GRANT EXECUTE ON FUNCTION auth_lookup_user(text) TO "${APP_DB_USER}";
-  GRANT EXECUTE ON FUNCTION criar_token_usuario(uuid, text, text, timestamptz) TO "${APP_DB_USER}";
-  GRANT EXECUTE ON FUNCTION consumir_token_usuario(text, text) TO "${APP_DB_USER}";
-  GRANT EXECUTE ON FUNCTION definir_senha_usuario(uuid, text, text, boolean) TO "${APP_DB_USER}";
-  GRANT EXECUTE ON FUNCTION localizar_usuario_para_recuperacao(text) TO "${APP_DB_USER}";
-  GRANT EXECUTE ON FUNCTION auth_lookup_user_por_id(uuid) TO "${APP_DB_USER}";
+  -- As funções de convite/recuperação de senha (criar_token_usuario e
+  -- companhia) só existem a partir de 011_convite_e_recuperacao_senha.sql,
+  -- que roda DEPOIS deste script (o Postgres executa /docker-entrypoint-initdb.d
+  -- em ordem alfabética, e "005-" vem antes de "011_"). Concedê-las aqui
+  -- quebraria a inicialização do zero com "function ... does not exist".
+  -- Por isso o GRANT dessas 5 funções fica dentro da própria 011, logo
+  -- depois de criá-las — não aqui.
   ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "${APP_DB_USER}";
 EOSQL
