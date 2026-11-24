@@ -30,18 +30,24 @@ bscRouter.post("/ingest", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Payload inválido.", detalhes: parsed.error.flatten() });
   const { pagina, linhas, tabelas, numeros } = parsed.data;
   const hash = createHash("sha256").update(JSON.stringify([linhas, tabelas])).digest("hex");
-  const r = await withRole("superadmin", "", (c) =>
-    c.query(
-      `INSERT INTO bsc_snapshots (pagina, linhas, tabelas, numeros, hash)
-       VALUES ($1, $2, $3, $4, $5) ON CONFLICT (pagina, hash) DO NOTHING RETURNING id`,
-      [pagina, JSON.stringify(linhas), JSON.stringify(tabelas), JSON.stringify(numeros), hash]
-    )
-  );
-  res.json({ ok: true, novo: r.rowCount === 1 });
+  try {
+    const r = await withRole("superadmin", "", (c) =>
+      c.query(
+        `INSERT INTO bsc_snapshots (pagina, linhas, tabelas, numeros, hash)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (pagina, hash) DO NOTHING RETURNING id`,
+        [pagina, JSON.stringify(linhas), JSON.stringify(tabelas), JSON.stringify(numeros), hash]
+      )
+    );
+    res.json({ ok: true, novo: r.rowCount === 1 });
+  } catch (err: any) {
+    console.error("BSC ingest falhou:", err?.code, err?.message);
+    res.status(500).json({ error: "Falha ao gravar o retrato do BSC." });
+  }
 });
 
 // Leitura: só superadmin/admin.
 bscRouter.get("/", requireAuth, requireRole("superadmin", "admin"), async (req, res) => {
+  try {
   const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT DISTINCT ON (pagina) id, pagina, coletado_em, linhas, tabelas, numeros
@@ -49,4 +55,8 @@ bscRouter.get("/", requireAuth, requireRole("superadmin", "admin"), async (req, 
     )
   );
   res.json({ configurado: Boolean(env.bsc.ingestToken), paginas: rows.rows });
+  } catch (err: any) {
+    console.error("BSC leitura falhou:", err?.code, err?.message);
+    res.status(500).json({ error: "Falha ao ler os dados do BSC." });
+  }
 });

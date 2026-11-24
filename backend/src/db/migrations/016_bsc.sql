@@ -16,3 +16,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS bsc_snapshots_hash_uq ON bsc_snapshots (pagina
 ALTER TABLE bsc_snapshots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY bsc_snapshots_select ON bsc_snapshots FOR SELECT USING (is_privileged_role());
 CREATE POLICY bsc_snapshots_insert ON bsc_snapshots FOR INSERT WITH CHECK (is_privileged_role());
+
+GRANT SELECT, INSERT ON bsc_snapshots TO gdf_app;
+GRANT USAGE, SELECT ON SEQUENCE bsc_snapshots_id_seq TO gdf_app;
