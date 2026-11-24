@@ -353,6 +353,23 @@ textarea {
   color: #e6ebf5;
 }
 
+.painel-integracao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-left: 4px solid var(--accent);
+}
+
+.painel-integracao h2 {
+  margin-bottom: 4px;
+}
+
+.area-conteudo-fundo .abas {
+  margin-bottom: 14px;
+}
+
 .barra-disp {
   position: relative;
   background: #eef1f8;

@@ -12,10 +12,29 @@ vehiclesRouter.get("/", async (req, res) => {
     c.query(
       `SELECT v.id, v.placa, v.chassi, v.base, v.tipo, v.rentadora, v.transportadora,
               v.subregiao, v.status, v.observacoes, v.motorista_atual_id,
-              d.nome AS motorista_nome
+              d.nome AS motorista_nome,
+              vv.estado AS vec_estado, vv.km AS vec_km, vv.ultimo_bip AS vec_ultimo_bip,
+              vv.sincronizado_em AS vec_sincronizado_em
        FROM vehicles v
        LEFT JOIN drivers d ON d.id = v.motorista_atual_id
+       LEFT JOIN vec_veiculos vv ON vv.placa = v.placa
        ORDER BY v.base, v.placa`
+    )
+  );
+  res.json(rows.rows);
+});
+
+// Frota completa como a VEC enxerga (todas as bases da RodaCoop), com
+// indicação de quais placas já estão cadastradas aqui.
+vehiclesRouter.get("/vec", async (req, res) => {
+  const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
+    c.query(
+      `SELECT vv.placa, vv.estado, vv.utilizacao, vv.modelo, vv.tipo, vv.regiao, vv.subregiao, vv.svc,
+              vv.transportadora, vv.locadora, vv.km, vv.ultimo_bip, vv.sincronizado_em,
+              (v.id IS NOT NULL) AS cadastrado
+       FROM vec_veiculos vv
+       LEFT JOIN vehicles v ON v.placa = vv.placa
+       ORDER BY vv.svc NULLS LAST, vv.placa`
     )
   );
   res.json(rows.rows);

@@ -12,6 +12,7 @@ import { occurrencesRouter } from "./routes/occurrences.routes";
 import { auditRouter } from "./routes/audit.routes";
 import { driversRouter } from "./routes/drivers.routes";
 import { basesRouter } from "./routes/bases.routes";
+import { agendarSyncVec } from "./adapters/vecAdapter";
 
 const app = express();
 
@@ -42,4 +43,5 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 app.listen(env.port, () => {
   // eslint-disable-next-line no-console
   console.log(`GESTÃO DE FROTA API ouvindo na porta ${env.port}`);
+  agendarSyncVec();
 });

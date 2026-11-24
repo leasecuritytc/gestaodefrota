@@ -21,8 +21,18 @@ export const env = {
     refreshToken: process.env.ML_REFRESH_TOKEN ?? "",
   },
   vec: {
-    baseUrl: process.env.VEC_API_BASE_URL ?? "",
+    // API interna do portal VEC Fleet do Mercado Livre (a mesma que o site
+    // https://meli-br.vecfleet.io usa por baixo). Não é documentada: pode
+    // mudar sem aviso — ver adapters/vecClient.ts.
+    baseUrl: process.env.VEC_API_BASE_URL || "https://meli-br.vecfleet.io/ws/Public/index.php/api",
+    // Token fixo (se um dia a VecFleet fornecer um). Se vazio, usa login.
     apiToken: process.env.VEC_API_TOKEN ?? "",
+    // Login de portal — preenchido SÓ pelo dono do projeto no .env do
+    // servidor. Nunca vai para o Git, nunca é logado.
+    usuario: process.env.VEC_USUARIO ?? "",
+    senha: process.env.VEC_SENHA ?? "",
+    // Intervalo da sincronização automática, em minutos (0 = desligada).
+    intervaloMin: Number(process.env.VEC_SYNC_INTERVALO_MIN ?? 120),
   },
   googleSheets: {
     // Uma ou mais planilhas, separadas por vírgula (uma por base, por

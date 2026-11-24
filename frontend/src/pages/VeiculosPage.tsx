@@ -15,6 +15,43 @@ interface Veiculo {
   observacoes: string | null;
   motorista_atual_id: string | null;
   motorista_nome: string | null;
+  vec_estado: string | null;
+  vec_km: string | null;
+  vec_ultimo_bip: string | null;
+}
+
+interface VeiculoVec {
+  placa: string;
+  estado: string | null;
+  modelo: string | null;
+  tipo: string | null;
+  subregiao: string | null;
+  svc: string | null;
+  locadora: string | null;
+  km: string | null;
+  ultimo_bip: string | null;
+  cadastrado: boolean;
+}
+
+interface StatusVec {
+  configurado: boolean;
+  ultimas: { iniciado_em: string; ok: boolean | null; veiculos: number; checklists: number; erro: string | null; origem: string }[];
+}
+
+function fmtData(v: string | null) {
+  return v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+}
+
+function fmtKm(v: string | null) {
+  return v ? `${Number(v).toLocaleString("pt-BR")} km` : "—";
+}
+
+function tagVec(estado: string | null) {
+  const e = (estado ?? "").toUpperCase();
+  if (e.includes("MANUTEN")) return "tag tag-manutencao";
+  if (e.includes("OCIOS")) return "tag tag-inativo";
+  if (e.includes("ATIVO") || e.includes("BIPANDO")) return "tag tag-ativa";
+  return "tag tag-inativo";
 }
 
 interface Motorista {
@@ -50,6 +87,43 @@ export default function VeiculosPage() {
   const [formDados, setFormDados] = useState<Partial<Veiculo>>({});
   const [salvandoDados, setSalvandoDados] = useState(false);
   const [erroModalDados, setErroModalDados] = useState<string | null>(null);
+
+  const [aba, setAba] = useState<"base" | "vec">("base");
+  const [frotaVec, setFrotaVec] = useState<VeiculoVec[] | null>(null);
+  const [buscaVec, setBuscaVec] = useState("");
+  const [statusVec, setStatusVec] = useState<StatusVec | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [msgSync, setMsgSync] = useState<string | null>(null);
+
+  function carregarVec() {
+    api.get<VeiculoVec[]>("/vehicles/vec").then((r) => setFrotaVec(r.data)).catch(() => setFrotaVec([]));
+    if (podeEditar) {
+      api.get<StatusVec>("/sync/vec/status").then((r) => setStatusVec(r.data)).catch(() => undefined);
+    }
+  }
+
+  useEffect(carregarVec, [podeEditar]);
+
+  async function sincronizarVec() {
+    setSincronizando(true);
+    setMsgSync(null);
+    try {
+      const { data } = await api.post("/sync/vec");
+      if (data.skipped) setMsgSync(data.skipped);
+      else if (data.ok) setMsgSync(`Sincronizado: ${data.veiculos} veículos e ${data.checklists} checklists da VEC.`);
+      else setMsgSync(`Falha na sincronização: ${data.erro}`);
+      carregar();
+      carregarVec();
+    } catch (err) {
+      setMsgSync(mensagemErro(err, "Não foi possível sincronizar com a VEC."));
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
+  const vecFiltrada = (frotaVec ?? []).filter((v) =>
+    !buscaVec ? true : `${v.placa} ${v.svc ?? ""} ${v.modelo ?? ""}`.toLowerCase().includes(buscaVec.toLowerCase())
+  );
 
   function carregar() {
     api
@@ -139,6 +213,86 @@ export default function VeiculosPage() {
       </p>
       {erro && <div className="erro">{erro}</div>}
 
+      {podeEditar && statusVec && (
+        <div className="painel painel-integracao">
+          <div>
+            <h2>Integração VEC</h2>
+            {!statusVec.configurado && (
+              <p className="vazio" style={{ textAlign: "left", padding: 0 }}>
+                Login da VEC ainda não configurado no servidor.
+              </p>
+            )}
+            {statusVec.configurado && statusVec.ultimas[0] && (
+              <p style={{ margin: 0, fontSize: 13 }}>
+                Última sincronização: {fmtData(statusVec.ultimas[0].iniciado_em)} —{" "}
+                {statusVec.ultimas[0].ok
+                  ? `${statusVec.ultimas[0].veiculos} veículos, ${statusVec.ultimas[0].checklists} checklists`
+                  : statusVec.ultimas[0].ok === false
+                    ? `falhou: ${statusVec.ultimas[0].erro}`
+                    : "em andamento"}
+              </p>
+            )}
+            {msgSync && <p style={{ margin: "6px 0 0", fontSize: 13, fontWeight: 600 }}>{msgSync}</p>}
+          </div>
+          <button className="btn btn-primario" style={{ width: "auto" }} onClick={sincronizarVec} disabled={sincronizando || !statusVec.configurado}>
+            {sincronizando ? "Sincronizando..." : "Sincronizar VEC agora"}
+          </button>
+        </div>
+      )}
+
+      <div className="abas">
+        <button className={aba === "base" ? "ativo" : ""} onClick={() => setAba("base")}>
+          Frota cadastrada
+        </button>
+        <button className={aba === "vec" ? "ativo" : ""} onClick={() => setAba("vec")}>
+          Frota na VEC {frotaVec && frotaVec.length > 0 ? `(${frotaVec.length})` : ""}
+        </button>
+      </div>
+
+      {aba === "vec" && (
+        <div className="painel">
+          <div className="barra-topo">
+            <div className="filtros">
+              <input placeholder="Buscar placa, SVC ou modelo..." value={buscaVec} onChange={(e) => setBuscaVec(e.target.value)} />
+            </div>
+          </div>
+          {frotaVec && frotaVec.length === 0 && (
+            <p className="vazio">Nenhum dado da VEC ainda — rode uma sincronização.</p>
+          )}
+          {vecFiltrada.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Placa</th>
+                  <th>Estado VEC</th>
+                  <th>SVC</th>
+                  <th>Modelo</th>
+                  <th>Locadora</th>
+                  <th>Km</th>
+                  <th>Último BIP</th>
+                  <th>Cadastrado aqui</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vecFiltrada.map((v) => (
+                  <tr key={v.placa}>
+                    <td><strong>{v.placa}</strong></td>
+                    <td><span className={tagVec(v.estado)}>{v.estado ?? "—"}</span></td>
+                    <td>{v.svc ?? "—"}</td>
+                    <td>{v.modelo ?? "—"}</td>
+                    <td>{v.locadora ?? "—"}</td>
+                    <td>{fmtKm(v.km)}</td>
+                    <td>{fmtData(v.ultimo_bip)}</td>
+                    <td>{v.cadastrado ? "Sim" : "Não"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {aba === "base" && (<>
       <div className="barra-topo">
         <div className="filtros">
           <input
@@ -176,6 +330,9 @@ export default function VeiculosPage() {
                 <th>Status</th>
                 <th>Rentadora</th>
                 <th>Motorista atual</th>
+                <th>Estado VEC</th>
+                <th>Km</th>
+                <th>Último BIP</th>
                 <th>Observações</th>
                 {(podeTrocarMotorista || podeEditar) && <th></th>}
               </tr>
@@ -192,6 +349,9 @@ export default function VeiculosPage() {
                   </td>
                   <td>{v.rentadora ?? "—"}</td>
                   <td>{v.motorista_nome ?? "Sem cooperado"}</td>
+                  <td>{v.vec_estado ? <span className={tagVec(v.vec_estado)}>{v.vec_estado}</span> : "—"}</td>
+                  <td>{fmtKm(v.vec_km)}</td>
+                  <td>{fmtData(v.vec_ultimo_bip)}</td>
                   <td>{v.observacoes ?? "—"}</td>
                   {(podeTrocarMotorista || podeEditar) && (
                     <td style={{ display: "flex", gap: 6 }}>
@@ -213,6 +373,7 @@ export default function VeiculosPage() {
           </table>
         )}
       </div>
+      </>)}
 
       {editando && (
         <div className="modal-fundo" onClick={() => setEditando(null)}>
