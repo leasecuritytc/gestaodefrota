@@ -9,6 +9,7 @@ import { dashboardRouter } from "./routes/dashboard.routes";
 import { syncRouter } from "./routes/sync.routes";
 import { usersRouter } from "./routes/users.routes";
 import { occurrencesRouter } from "./routes/occurrences.routes";
+import { auditRouter } from "./routes/audit.routes";
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/sync", syncRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/occurrences", occurrencesRouter);
+app.use("/api/audit", auditRouter);
 
 // Handler de erro central: nunca vaza stack trace nem detalhe de SQL ao cliente.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

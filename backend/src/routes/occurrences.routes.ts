@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { withRole } from "../db";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { registrarAuditoria } from "../audit";
 
 export const occurrencesRouter = Router();
 occurrencesRouter.use(requireAuth);
@@ -126,8 +127,8 @@ occurrencesRouter.patch(
     const { status, maintenance_id } = parsed.data;
     const resolved = status === "resolvida" || status === "rejeitada";
 
-    const result = await withRole(req.auth!.role, req.auth!.sub, (c) =>
-      c.query(
+    const result = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+      const updated = await c.query(
         `UPDATE occurrences
          SET status = $1,
              maintenance_id = COALESCE($2, maintenance_id),
@@ -136,8 +137,16 @@ occurrencesRouter.patch(
          WHERE id = $5
          RETURNING *`,
         [status, maintenance_id ?? null, resolved, req.auth!.sub, req.params.id]
-      )
-    );
+      );
+      if (updated.rows[0]) {
+        await registrarAuditoria(c, req.auth!.sub, "atualizar_ocorrencia", "occurrences", req.params.id, {
+          novo_status: status,
+          tipo: updated.rows[0].tipo,
+          maintenance_id: updated.rows[0].maintenance_id,
+        });
+      }
+      return updated;
+    });
     if (!result.rows[0]) {
       return res.status(404).json({ error: "Ocorrência não encontrada." });
     }

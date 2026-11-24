@@ -222,10 +222,54 @@ Staff (admin/gestor_base/superadmin) decide o encaminhamento por
 ou `resolvida`; opcionalmente linkando a uma manutenção já aberta via
 `maintenance_id`).
 
-**Troca de motorista num veículo:** hoje é manual (atualizar
-`vehicles.motorista_atual_id` e inserir uma linha em
-`vehicle_driver_history`) — ainda não existe uma rota dedicada para isso;
-avise quando precisar que eu crie `PATCH /api/vehicles/:id/motorista`.
+**Troca de motorista num veículo:** `PATCH /api/vehicles/:id/motorista`,
+liberado para `gestor_base`, `admin` e `superadmin` (decisão de 24/11/2026).
+```json
+{ "driver_id": "uuid-do-motorista-novo" }
+```
+`driver_id: null` retira o motorista atual sem atribuir outro. A rota fecha
+sozinha o vínculo anterior em `vehicle_driver_history` (`fim = now()`) e abre
+o novo — nunca apaga o histórico. Toda troca (inclusive uma tentativa que não
+muda nada) vira uma linha em auditoria — ver seção abaixo.
+
+**Erro comum:** `driver_id` que não existe retorna 400 com
+`"Motorista (driver_id) não encontrado."` — confira o `id` em `GET /api/users`
+ou na tabela `drivers`, não o `id` do usuário de login (são tabelas
+diferentes; só motoristas com login têm os dois ligados por `drivers.user_id`).
+
+## Auditoria
+
+Toda ação sensível (criar/atualizar usuário, conceder/revogar acesso à
+própria auditoria, trocar motorista de veículo, resolver ocorrência) grava
+uma linha em `audit_log`, com usuário, ação, entidade afetada e um "antes/
+depois" em JSON — pensado para virar relatório de reunião, não só debug.
+
+**Quem pode ler** (`GET /api/audit`): só `superadmin`, por padrão. Um `admin`
+só enxerga depois que um superadmin concede acesso — nunca automático, nunca
+para `gestor_base`/`leitor`/`motorista` (mesmo que eles gravem eventos, não
+podem lê-los depois). Isso é garantido em duas camadas, como o resto do
+projeto: a rota confere, e a RLS do banco (`pode_ver_auditoria()`) bloqueia
+mesmo que a rota tivesse um bug.
+
+**Conceder acesso a um admin** (só `superadmin`):
+```json
+PATCH /api/users/:id/acesso-auditoria
+{ "acesso_auditoria": true }
+```
+Mandar `false` revoga. Funciona só enquanto o papel do usuário for `admin`
+— conceder para um `gestor_base` é aceito sem erro, mas não tem efeito
+nenhum (a API avisa isso na resposta).
+
+**Consultar / exportar para reunião:**
+```
+GET /api/audit?desde=2026-11-01&ate=2026-11-30&acao=trocar_motorista
+GET /api/audit/export.csv?desde=2026-11-01&ate=2026-11-30
+```
+Filtros opcionais: `desde`, `ate` (datas ISO), `acao`, `entidade`,
+`usuario_id`. O `.csv` já vem pronto para abrir no Excel/Sheets — o
+cabeçalho `Content-Disposition` força o download (se abrir direto no
+navegador em vez de baixar, é o navegador tentando exibir o CSV; salve a
+página como arquivo).
 
 ## Operações do dia a dia
 
@@ -251,3 +295,88 @@ chegarem:
 
 Até lá, essas rotas respondem dizendo exatamente o que falta — nunca
 simulam um resultado de sincronização.
+
+## Ativando o Google Sheets de verdade
+
+A plataforma original lia a planilha Google como link público anônimo — foi
+exatamente uma das falhas de segurança corrigidas nesta reconstrução (ver
+achado C1/C2 no PRD). Por isso a integração nova (`backend/src/adapters/
+googleSheetsAdapter.ts`) só funciona com uma **service account** autorizada
+como leitora da planilha — nunca lendo um link público.
+
+**Passo a passo** (10–15 minutos, uma vez só):
+
+1. **Criar o projeto e a service account no Google Cloud:**
+   - Acesse [console.cloud.google.com](https://console.cloud.google.com/),
+     crie um projeto (ou use um existente).
+   - Ative a **Google Sheets API** (menu "APIs e serviços" → "Biblioteca" →
+     busque "Google Sheets API" → Ativar).
+   - Em "APIs e serviços" → "Credenciais" → "Criar credenciais" → "Conta de
+     serviço". Dê um nome (ex.: `gestaodefrota-sheets`), não precisa de papel
+     nenhum no projeto (a permissão real vem do compartilhamento da planilha,
+     passo 3).
+   - Na conta de serviço criada, aba "Chaves" → "Adicionar chave" → "Criar
+     nova chave" → tipo **JSON**. Isso baixa um arquivo `.json` — é o
+     conteúdo dele que vai no `.env` (passo 4).
+
+   **Erro comum:** esquecer de ativar a Google Sheets API no projeto — a
+   sincronização falha com um erro tipo "API has not been used/enabled".
+   Volte no passo acima e ative.
+
+2. **Pegar o e-mail da service account:** está dentro do JSON baixado, campo
+   `"client_email"` (algo como
+   `gestaodefrota-sheets@seu-projeto.iam.gserviceaccount.com`).
+
+3. **Compartilhar CADA planilha com esse e-mail**, como **Leitor** (não
+   Editor — a sincronização só lê). Na planilha: botão "Compartilhar", cole
+   o e-mail da service account, papel "Leitor", enviar.
+
+   **Erro comum:** esquecer este passo é a causa mais comum de erro. Se a
+   sincronização falhar com algo como "The caller does not have permission"
+   ou "Requested entity was not found", é isso — confirme o compartilhamento
+   na planilha certa, com o e-mail certo.
+
+4. **Preencher o `.env` da VPS:**
+   ```bash
+   GOOGLE_SHEETS_SPREADSHEET_IDS=1-mo3u8HlUNlPCHEeMTF9ID_Q812jBBYXla5zqyDU-uQ
+   GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...","private_key":"...",...}'
+   ```
+   - O ID da planilha é o trecho entre `/d/` e `/edit` na URL.
+   - Mais de uma planilha (uma por base, por exemplo): separe os IDs por
+     vírgula.
+   - O valor de `GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON` é o arquivo `.json`
+     inteiro, **numa linha só**, entre aspas simples — copie o conteúdo do
+     arquivo baixado e cole direto (não precisa remover nada, só garantir
+     que fique numa linha).
+
+   **Erro comum:** colar o JSON com quebras de linha reais (não apenas os
+   `\n` dentro de `private_key`) quebra o parsing — se a sincronização
+   responder "não é um JSON válido", abra o arquivo baixado num editor que
+   mostre tudo numa linha, ou use `cat arquivo.json | tr -d '\n'` com cuidado
+   para não remover os `\n` que fazem parte da própria chave (o jeito mais
+   seguro é copiar o arquivo inteiro como veio, sem reformatar).
+
+5. **Reiniciar a API** para carregar o novo `.env`:
+   ```bash
+   docker compose up -d --build api
+   ```
+
+6. **Disparar a sincronização** (autenticado como `admin` ou `superadmin`):
+   ```bash
+   curl -X POST https://alexander-log.com.br/api/sync/google-sheets \
+     -H "Authorization: Bearer SEU_TOKEN"
+   ```
+   Resposta de sucesso: `{ "synced": 42, "detalhes": { "<id-da-planilha>": { "abas": 2, "veiculos": 42 } } }`.
+   Cada aba da planilha é lida sozinha — uma aba sem a coluna `PLACA` é
+   ignorada (não dá erro, só não conta). Veículos já existentes são
+   atualizados (`status`, motorista, observação), nunca duplicados; motorista
+   é casado pelo nome exatamente como está na planilha (mesma lógica da
+   importação manual em `docs/base-smg3-pouso-alegre.md`).
+
+Até a service account ser configurada, `POST /api/sync/google-sheets`
+responde `{ "synced": 0, "skipped": "..." }` — nunca inventa dado.
+
+**Agendar automaticamente** (opcional, para não precisar chamar na mão toda
+vez que a planilha mudar): um `cron` na própria VPS chamando o `curl` acima
+a cada X minutos, ou um agendador dentro da aplicação — me avise se quiser
+que eu implemente isso.

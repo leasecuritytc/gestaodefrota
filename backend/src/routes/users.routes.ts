@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { withRole, AppRole } from "../db";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { registrarAuditoria } from "../audit";
 
 export const usersRouter = Router();
 usersRouter.use(requireAuth, requireRole("superadmin", "admin"));
@@ -93,6 +94,14 @@ usersRouter.post("/", async (req, res) => {
           );
         }
       }
+
+      await registrarAuditoria(c, req.auth!.sub, "criar_usuario", "users", user.id, {
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        placa_atual: u.placa_atual ?? null,
+      });
+
       return user;
     });
     res.status(201).json(result);
@@ -136,15 +145,69 @@ usersRouter.patch("/:id", async (req, res) => {
     return res.status(400).json({ error: "Nada para atualizar." });
   }
   params.push(req.params.id);
-  const result = await withRole(req.auth!.role, req.auth!.sub, (c) =>
-    c.query(
+  const result = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    const updated = await c.query(
       `UPDATE users SET ${sets.join(", ")} WHERE id = $${params.length}
        RETURNING id, email, full_name, role, active, created_at`,
       params
-    )
-  );
+    );
+    if (updated.rows[0]) {
+      await registrarAuditoria(c, req.auth!.sub, "atualizar_usuario", "users", req.params.id, {
+        email: updated.rows[0].email,
+        alteracoes: parsed.data,
+      });
+    }
+    return updated;
+  });
   if (!result.rows[0]) {
     return res.status(404).json({ error: "Usuário não encontrado." });
   }
   res.json(result.rows[0]);
 });
+
+// PATCH /api/users/:id/acesso-auditoria — só superadmin concede ou revoga o
+// acesso de um admin ao log de auditoria (nunca o próprio admin se concede;
+// nunca gestor_base/leitor/motorista, mesmo que a flag seja marcada manualmente
+// no banco — pode_ver_auditoria() em 010_auditoria_e_troca_motorista.sql só
+// considera essa flag quando o papel atual já é 'admin').
+const acessoAuditoriaSchema = z.object({ acesso_auditoria: z.boolean() });
+
+usersRouter.patch(
+  "/:id/acesso-auditoria",
+  requireRole("superadmin"),
+  async (req, res) => {
+    const parsed = acessoAuditoriaSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    const result = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+      const updated = await c.query(
+        `UPDATE users SET acesso_auditoria = $1 WHERE id = $2
+         RETURNING id, email, full_name, role, acesso_auditoria`,
+        [parsed.data.acesso_auditoria, req.params.id]
+      );
+      if (updated.rows[0]) {
+        await registrarAuditoria(
+          c,
+          req.auth!.sub,
+          parsed.data.acesso_auditoria ? "conceder_acesso_auditoria" : "revogar_acesso_auditoria",
+          "users",
+          req.params.id,
+          { email: updated.rows[0].email }
+        );
+      }
+      return updated;
+    });
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+    if (result.rows[0].role !== "admin") {
+      return res.json({
+        ...result.rows[0],
+        aviso:
+          "Este usuário não tem papel 'admin' — a flag foi salva, mas só tem efeito quando o papel for 'admin'.",
+      });
+    }
+    res.json(result.rows[0]);
+  }
+);
