@@ -114,6 +114,65 @@ async function enviar(pagina, dados) {
   return { ...corpo, resposta: txt };
 }
 
+
+async function fecharMenus(page) {
+  for (let i = 0; i < 2; i++) {
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await page.waitForTimeout(400);
+  }
+}
+
+// O menu do Looker é um carrossel: itens fora da área visível não aceitam clique normal.
+async function clicarMenu(page, nome) {
+  await fecharMenus(page);
+  const item = page.getByText(nome, { exact: true });
+  const visivel = item.locator("visible=true").first();
+  if (await visivel.count()) {
+    await visivel.click({ timeout: 15000 });
+  } else {
+    await item.first().dispatchEvent("click", {}, { timeout: 15000 });
+  }
+  await page.waitForTimeout(1500);
+}
+
+// Itens do submenu aberto (overlay), se houver.
+async function itensSubmenu(page) {
+  return page.evaluate(() => {
+    const sel = ".cdk-overlay-container [role=menuitem], .cdk-overlay-container .mat-mdc-menu-item, .cdk-overlay-container .mat-menu-item, .cdk-overlay-container button";
+    return [...new Set([...document.querySelectorAll(sel)].map((e) => (e.innerText || "").replace(/\s+/g, " ").trim()).filter(Boolean))];
+  });
+}
+
+async function coletarTela(page, rotulo) {
+  await fecharMenus(page);
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+  await page.waitForTimeout(6000); // gráficos do Looker renderizam depois do load
+  const dados = await extrair(page);
+  const r = await enviar(rotulo, dados);
+  console.log(`OK  ${rotulo}: ${r.linhas.length} linhas, ${r.tabelas.length} tabelas, ${r.numeros.length} números → ${r.resposta}`);
+}
+
+// "FROTA FIXA" coleta todas as subpáginas do menu; "FROTA FIXA > Disponibilidade/Utilização" coleta só uma.
+async function coletarItem(page, nome) {
+  const [pai, filho] = nome.split(">").map((x) => x.trim());
+  await clicarMenu(page, pai);
+  const subs = filho ? [filho] : await itensSubmenu(page);
+  if (subs.length === 0) {
+    await coletarTela(page, pai);
+    return;
+  }
+  for (let i = 0; i < subs.length; i++) {
+    if (i > 0) await clicarMenu(page, pai);
+    try {
+      await page.locator(".cdk-overlay-container").getByText(subs[i], { exact: true }).first().click({ timeout: 15000 });
+      await coletarTela(page, `${pai} > ${subs[i]}`);
+    } catch (e) {
+      console.error(`ERRO ${pai} > ${subs[i]}: ${e.message.split("\n")[0]}`);
+      await page.screenshot({ path: path.join(dir, `erro-${Date.now()}.png`) }).catch(() => undefined);
+    }
+  }
+}
+
 async function coletar() {
   if (!API_URL || !TOKEN || !BSC_URL || PAGINAS.length === 0) throw new Error("Preencha API_URL, BSC_INGEST_TOKEN, BSC_URL e BSC_PAGINAS no .env");
   const ctx = await abrir(true);
@@ -139,23 +198,12 @@ async function coletar() {
     await page.waitForTimeout(4000);
     for (const nome of PAGINAS) {
       try {
-        // O menu do Looker é um carrossel: itens fora da área visível não aceitam clique normal.
-        const item = page.getByText(nome, { exact: true });
-        const visivel = item.locator("visible=true").first();
-        if (await visivel.count()) {
-          await visivel.click({ timeout: 15000 });
-        } else {
-          await item.first().dispatchEvent("click", {}, { timeout: 15000 });
-        }
-        await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => undefined);
-        await page.waitForTimeout(6000); // gráficos do Looker renderizam depois do load
-        const dados = await extrair(page);
-        const r = await enviar(nome, dados);
-        console.log(`OK  ${nome}: ${r.linhas.length} linhas, ${r.tabelas.length} tabelas, ${r.numeros.length} números → ${r.resposta}`);
+        await coletarItem(page, nome);
       } catch (e) {
         falhas++;
-        console.error(`ERRO ${nome}: ${e.message}`);
+        console.error(`ERRO ${nome}: ${e.message.split("\n")[0]}`);
         await page.screenshot({ path: path.join(dir, `erro-${Date.now()}.png`) }).catch(() => undefined);
+        await fecharMenus(page);
       }
     }
   } finally {
