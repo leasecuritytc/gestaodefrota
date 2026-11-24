@@ -39,7 +39,13 @@ ON CONFLICT (placa) DO NOTHING;
 INSERT INTO maintenance_records
   (placa, base, tipo, descricao, oficina, data_entrada, data_saida, custo, status, source, source_id)
 VALUES
-  ('FYB0J84', 'SMG9', 'Outros',   '233werfwefwefwefwefwef', 'sq', '2026-11-20', '2026-11-11', 4344, 'Concluída',
+  -- Valor original na fonte: data_entrada=2026-11-20, data_saida=2026-11-11
+  -- (saída ANTERIOR à entrada — achado real de inconsistência, ver PRD M1).
+  -- A constraint chk_datas (001_init.sql) não é "deferrable", então não dá
+  -- pra inserir o valor errado e corrigir depois com UPDATE: o INSERT falha
+  -- na hora. Por isso a correção (data_saida = data_entrada) entra já aqui,
+  -- e o valor original da fonte fica só neste comentário, não escondido.
+  ('FYB0J84', 'SMG9', 'Outros',   '233werfwefwefwefwefwef', 'sq', '2026-11-20', '2026-11-20', 4344, 'Concluída',
     'legado_lovable', 'f5fcd710-2786-497a-8c7d-0528301ad482'),
   ('TZK0E38', 'SMG3', 'Corretiva','TROCAR PASTILHAS DE FREIO ,ALINHAMENTO E BALANCEAMENTO,TROCA DE OLEO E FILTROS',
     'CENTRO AUTOMOTIVO VAREJÃO', '2026-11-19', NULL, 0, 'Em andamento',
@@ -65,17 +71,6 @@ VALUES
   ('TZK0E08', 'SMG3', 'Corretiva','REPARO SINISTRO', 'CENTRO AUTOMOTIVO VAREJÃO',
     '2026-12-01', NULL, 0, 'Em andamento', 'legado_lovable', '44acf186-76b5-478c-8466-55e4ccef243d')
 ON CONFLICT (source, source_id) DO NOTHING;
-
--- NOTA DE INTEGRIDADE (mantida de propósito, não corrigida no seed):
--- o registro f5fcd710... tem data_saida (2026-11-11) ANTERIOR à data_entrada
--- (2026-11-20). A constraint chk_datas da migration 001 bloqueia isso em
--- qualquer INSERT/UPDATE futuro; este seed usa dados históricos tal como
--- estavam na fonte, então o valor é ajustado para respeitar a constraint
--- (ver linha abaixo) e o caso fica registrado aqui como achado, não escondido.
-UPDATE maintenance_records
-   SET data_saida = data_entrada
- WHERE source_id = 'f5fcd710-2786-497a-8c7d-0528301ad482'
-   AND data_saida < data_entrada;
 
 -- ===================== Snapshots reais da frota (fonte: legado_lovable) =====================
 

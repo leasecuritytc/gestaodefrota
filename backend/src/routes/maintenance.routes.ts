@@ -20,7 +20,7 @@ maintenanceRouter.get("/", async (req, res) => {
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const rows = await withRole(req.auth!.role, (c) =>
+  const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT id, placa, base, tipo, descricao, oficina, data_entrada, data_saida,
               custo, status, source, ingested_at
@@ -55,7 +55,7 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
       .status(400)
       .json({ error: "Data de saída não pode ser anterior à data de entrada." });
   }
-  const result = await withRole(req.auth!.role, (c) =>
+  const result = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `INSERT INTO maintenance_records
          (placa, base, tipo, descricao, oficina, data_entrada, data_saida, custo, status, source, source_id)

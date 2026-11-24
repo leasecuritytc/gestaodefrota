@@ -7,7 +7,7 @@ export const vehiclesRouter = Router();
 vehiclesRouter.use(requireAuth);
 
 vehiclesRouter.get("/", async (req, res) => {
-  const rows = await withRole(req.auth!.role, (c) =>
+  const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT id, placa, chassi, base, tipo, rentadora, transportadora, subregiao, status
        FROM vehicles ORDER BY base, placa`
@@ -33,7 +33,7 @@ vehiclesRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), asyn
   }
   const v = parsed.data;
   try {
-    const result = await withRole(req.auth!.role, (c) =>
+    const result = await withRole(req.auth!.role, req.auth!.sub, (c) =>
       c.query(
         `INSERT INTO vehicles (placa, chassi, base, tipo, rentadora, transportadora, subregiao)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,

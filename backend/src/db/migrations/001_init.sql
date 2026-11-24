@@ -13,8 +13,9 @@ CREATE TABLE users (
   full_name     text NOT NULL,
   -- superadmin: dono/desenvolvedor do projeto (papel de praxe em todo projeto
   -- seu); admin: administração da operação; gestor_base: gestão de uma base;
-  -- leitor: consulta.
-  role          text NOT NULL CHECK (role IN ('superadmin', 'admin', 'gestor_base', 'leitor')),
+  -- leitor: consulta; motorista: acesso restrito ao próprio veículo, só para
+  -- reportar ocorrências (ver tabela "occurrences" e RLS em 002_rls.sql).
+  role          text NOT NULL CHECK (role IN ('superadmin', 'admin', 'gestor_base', 'leitor', 'motorista')),
   active        boolean NOT NULL DEFAULT true,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
@@ -43,10 +44,35 @@ CREATE INDEX idx_vehicles_status ON vehicles(status);
 
 CREATE TABLE drivers (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  nome        text,
-  documento   text,
+  nome        text NOT NULL,
+  documento   text, -- CPF, quando informado
+  cnh         text, -- número da CNH, quando informado
+  telefone    text,
+  -- Login próprio do motorista (papel 'motorista' em users), opcional: um
+  -- motorista pode existir só como registro (vindo da VEC, por exemplo) sem
+  -- nunca ter acessado o sistema.
+  user_id     uuid UNIQUE REFERENCES users(id),
+  active      boolean NOT NULL DEFAULT true,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+
+-- Veículo que o motorista dirige hoje. Histórico de trocas fica em
+-- vehicle_driver_history (abaixo) — importante para apurar quem dirigia o
+-- veículo na data de um sinistro ou acidente relatado depois.
+ALTER TABLE vehicles ADD COLUMN motorista_atual_id uuid REFERENCES drivers(id);
+
+CREATE TABLE vehicle_driver_history (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vehicle_id  uuid NOT NULL REFERENCES vehicles(id),
+  driver_id   uuid NOT NULL REFERENCES drivers(id),
+  inicio      timestamptz NOT NULL DEFAULT now(),
+  fim         timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_periodo CHECK (fim IS NULL OR fim >= inicio)
+);
+
+CREATE INDEX idx_vdh_vehicle ON vehicle_driver_history(vehicle_id, inicio);
 
 -- ===================== Manutenção =====================
 
@@ -145,6 +171,44 @@ CREATE TABLE fleet_snapshots (
 
   CONSTRAINT uq_snapshot_origem UNIQUE (snapshot_date, base, source)
 );
+
+-- ===================== Ocorrências reportadas (motorista) =====================
+-- O que o motorista relata do campo: pedido de manutenção, sinistro, avaria,
+-- acidente, multa ou outro. Uma ocorrência pode, depois, originar um
+-- registro em maintenance_records (campo maintenance_id) — a ocorrência em
+-- si nunca é apagada, só ligada ao registro que resolveu o caso.
+
+CREATE TABLE occurrences (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vehicle_id     uuid NOT NULL REFERENCES vehicles(id),
+  driver_id      uuid REFERENCES drivers(id), -- quem relatou (nulo se um admin registrou em nome do motorista)
+  tipo           text NOT NULL CHECK (tipo IN (
+                   'manutencao_solicitada', 'sinistro', 'avaria', 'acidente', 'multa', 'outro'
+                 )),
+  descricao      text NOT NULL,
+  local          text, -- endereço ou referência livre de onde ocorreu
+  data_hora      timestamptz NOT NULL DEFAULT now(),
+  -- Espaço para anexos (fotos do dano, boletim de ocorrência, notificação de
+  -- multa) quando o upload de arquivos for implementado; fica pronto desde já
+  -- para não exigir outra migration só por causa disso.
+  anexos         jsonb NOT NULL DEFAULT '[]'::jsonb,
+
+  status         text NOT NULL DEFAULT 'aberta'
+                 CHECK (status IN ('aberta', 'em_analise', 'aprovada', 'rejeitada', 'resolvida')),
+  maintenance_id uuid REFERENCES maintenance_records(id),
+  resolved_by    uuid REFERENCES users(id),
+  resolved_at    timestamptz,
+
+  created_at     timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_resolucao CHECK (
+    (status IN ('resolvida', 'rejeitada')) = (resolved_at IS NOT NULL)
+  )
+);
+
+CREATE INDEX idx_occurrences_vehicle ON occurrences(vehicle_id, data_hora DESC);
+CREATE INDEX idx_occurrences_status ON occurrences(status);
+CREATE INDEX idx_occurrences_driver ON occurrences(driver_id);
 
 -- ===================== Auditoria =====================
 

@@ -173,6 +173,48 @@ curl https://alexander-log.com.br/api/health
 **Erro comum:** se o certbot falhar dizendo que não alcançou o domínio, o
 DNS ainda não propagou — espere e tente de novo.
 
+## Papel motorista e ocorrências de campo
+
+Além da hierarquia de escritório (superadmin/admin/gestor_base/leitor), existe
+o papel **motorista**: login próprio, mas de escopo estreito — só enxerga o
+veículo que dirige hoje (`vehicles.motorista_atual_id`) e só reporta
+ocorrências desse veículo. Isso é garantido em duas camadas: a API confere o
+papel, e o banco (RLS) bloqueia mesmo que a API tivesse um bug — testei isso
+manualmente (um motorista tentando reportar em veículo de outro recebe
+`ERROR: new row violates row-level security policy`, não um 403 da API).
+
+**Criar um motorista** (via `POST /api/users`, autenticado como admin/superadmin):
+```json
+{
+  "email": "motorista@rodacoop.com.br",
+  "password": "senha-forte-de-verdade",
+  "full_name": "Nome do Motorista",
+  "role": "motorista",
+  "telefone": "11999990000",
+  "documento": "CPF opcional",
+  "cnh": "número da CNH, opcional",
+  "placa_atual": "TZK0E38"
+}
+```
+Isso cria o usuário, o registro em `drivers` já ligado a ele, e (se
+`placa_atual` for informada) já atribui o veículo.
+
+**Tipos de ocorrência que o motorista pode reportar** (`POST /api/occurrences`,
+campo `tipo`): `manutencao_solicitada`, `sinistro`, `avaria`, `acidente`,
+`multa` ou `outro`. Exemplo:
+```json
+{ "placa": "TZK0E38", "tipo": "sinistro", "descricao": "Colisão lateral no cruzamento X" }
+```
+Staff (admin/gestor_base/superadmin) decide o encaminhamento por
+`PATCH /api/occurrences/:id` (`status`: `em_analise`, `aprovada`, `rejeitada`
+ou `resolvida`; opcionalmente linkando a uma manutenção já aberta via
+`maintenance_id`).
+
+**Troca de motorista num veículo:** hoje é manual (atualizar
+`vehicles.motorista_atual_id` e inserir uma linha em
+`vehicle_driver_history`) — ainda não existe uma rota dedicada para isso;
+avise quando precisar que eu crie `PATCH /api/vehicles/:id/motorista`.
+
 ## Operações do dia a dia
 
 - **Ver logs:** `docker compose logs -f api` (ou `db`).

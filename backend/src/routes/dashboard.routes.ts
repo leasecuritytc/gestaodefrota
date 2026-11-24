@@ -6,7 +6,7 @@ export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
 
 dashboardRouter.get("/resumo", async (req, res) => {
-  const result = await withRole(req.auth!.role, async (c) => {
+  const result = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
     const porStatus = await c.query(
       `SELECT status, count(*)::int AS total FROM vehicles GROUP BY status`
     );
