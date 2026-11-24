@@ -296,6 +296,23 @@ textarea {
     url("/fundo-rodacoop.jpg") center/cover no-repeat fixed;
 }
 
+/* Títulos e textos soltos (fora dos cards) legíveis sobre a imagem em
+   todas as telas. */
+.area-conteudo-fundo .conteudo > h1 {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.area-conteudo-fundo .conteudo > .descricao-pagina {
+  color: #e6ebf5;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.area-conteudo-fundo .barra-topo select,
+.area-conteudo-fundo .barra-topo input {
+  background: rgba(255, 255, 255, 0.96);
+}
+
 .area-conteudo-fundo .hero-painel {
   background: transparent;
   box-shadow: none;

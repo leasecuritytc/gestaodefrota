@@ -69,7 +69,7 @@ export default function Layout() {
           </button>
         </div>
       </header>
-      <div className={`area-conteudo${noPainel ? " area-conteudo-fundo" : ""}`}>
+      <div className={`area-conteudo area-conteudo-fundo${noPainel ? " area-painel" : ""}`}>
         <main className="conteudo">
           <Outlet />
         </main>
