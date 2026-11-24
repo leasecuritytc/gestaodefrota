@@ -114,7 +114,14 @@ curl http://127.0.0.1:4001/api/health
 Deve responder `{"status":"ok"}`. Se der "connection refused", rode
 `docker compose ps` e `docker compose logs api` para ver o erro.
 
-### 5. Criar o primeiro usuário admin
+### 5. Criar o primeiro usuário (superadmin)
+
+De praxe, todo projeto tem uma hierarquia de papéis: **superadmin** (você,
+dono/desenvolvedor) → **admin** (administração da operação) → **gestor_base**
+(gestão de uma base) → **leitor** (só consulta). Este passo cria só o
+primeiro, o superadmin — os demais são criados depois, já autenticado, por
+`POST /api/users` (exige papel `superadmin` ou `admin`; só `superadmin` pode
+criar outro `superadmin` ou um `admin`).
 
 ```bash
 docker compose exec \
@@ -123,6 +130,8 @@ docker compose exec \
   -e ADMIN_NAME='Seu Nome' \
   api node dist/scripts/createAdmin.js
 ```
+
+(Sem precisar passar `ADMIN_ROLE` — o padrão já é `superadmin`.)
 
 **Erro comum:** senha com menos de 12 caracteres é recusada de propósito
 pelo script. Use uma senha forte de verdade, não um teste.

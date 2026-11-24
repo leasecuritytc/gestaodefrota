@@ -44,7 +44,7 @@ const createSchema = z.object({
   custo: z.number().min(0).default(0),
 });
 
-maintenanceRouter.post("/", requireRole("admin", "gestor_base"), async (req, res) => {
+maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });

@@ -26,7 +26,7 @@ const createSchema = z.object({
   subregiao: z.string().optional(),
 });
 
-vehiclesRouter.post("/", requireRole("admin", "gestor_base"), async (req, res) => {
+vehiclesRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });

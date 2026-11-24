@@ -1,6 +1,6 @@
 -- A rota de login precisa consultar a tabela "users" ANTES de existir
 -- qualquer "app.role" de sessão (o papel só é conhecido depois de validar a
--- senha). Como users tem RLS restrito a current_app_role() = 'admin', essa
+-- senha). Como users tem RLS restrita a superadmin/admin (is_privileged_role()), essa
 -- consulta seria sempre bloqueada. A saída correta não é afrouxar a política
 -- de SELECT da tabela, e sim expor só o necessário por uma função
 -- SECURITY DEFINER, estreita e auditável: devolve password_hash somente

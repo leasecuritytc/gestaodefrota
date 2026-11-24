@@ -11,7 +11,10 @@ CREATE TABLE users (
   email         text UNIQUE NOT NULL,
   password_hash text NOT NULL,
   full_name     text NOT NULL,
-  role          text NOT NULL CHECK (role IN ('admin', 'gestor_base', 'leitor')),
+  -- superadmin: dono/desenvolvedor do projeto (papel de praxe em todo projeto
+  -- seu); admin: administração da operação; gestor_base: gestão de uma base;
+  -- leitor: consulta.
+  role          text NOT NULL CHECK (role IN ('superadmin', 'admin', 'gestor_base', 'leitor')),
   active        boolean NOT NULL DEFAULT true,
   created_at    timestamptz NOT NULL DEFAULT now()
 );

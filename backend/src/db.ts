@@ -3,7 +3,7 @@ import { env } from "./env";
 
 export const pool = new Pool({ connectionString: env.databaseUrl });
 
-export type AppRole = "admin" | "gestor_base" | "leitor";
+export type AppRole = "superadmin" | "admin" | "gestor_base" | "leitor";
 
 /**
  * Executa `work` dentro de uma transação com `app.role` definido via
