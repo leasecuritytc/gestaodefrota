@@ -168,89 +168,99 @@ textarea {
   font-size: 13px;
 }
 
-/* ===== App autenticado ===== */
+/* ===== App autenticado: navbar horizontal no topo ===== */
 
-.app-shell {
-  display: flex;
+.app-shell-navbar {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-.sidebar {
-  width: 230px;
-  flex-shrink: 0;
+.navbar {
   background: var(--navy);
   color: #cfd8ea;
   display: flex;
-  flex-direction: column;
-  padding: 18px 0;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 24px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 
-.sidebar .faixa-risco {
-  margin: -18px 0 14px;
+.navbar-marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 20px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.sidebar .marca {
-  padding: 0 20px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 10px;
+.navbar-logo {
+  font-size: 22px;
 }
 
-.sidebar .marca strong {
+.navbar-marca strong {
   color: #fff;
   font-size: 15px;
   display: block;
+  letter-spacing: 0.4px;
 }
 
-.sidebar .marca span {
-  font-size: 11px;
+.navbar-subtitulo {
+  font-size: 10.5px;
   color: #8ea0c4;
 }
 
-.sidebar nav {
+.navbar-links {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 2px;
-  padding: 0 10px;
 }
 
-.sidebar nav a {
+.navbar-links a {
   display: block;
-  padding: 10px 14px;
-  border-radius: 8px;
+  padding: 8px 12px;
+  border-radius: 7px;
   color: #cfd8ea;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.sidebar nav a.ativo,
-.sidebar nav a:hover {
+.navbar-links a.ativo,
+.navbar-links a:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
 
-.sidebar .rodape {
-  padding: 14px 20px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+.navbar-usuario {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
   font-size: 12px;
-  color: #8ea0c4;
+  text-align: right;
 }
 
-.sidebar .rodape button {
-  margin-top: 8px;
-  background: none;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #cfd8ea;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  width: 100%;
+.navbar-usuario-nome {
+  font-weight: 700;
+  color: #fff;
+}
+
+.navbar-usuario-papel {
+  color: #8ea0c4;
+  margin-bottom: 2px;
 }
 
 .conteudo {
   flex: 1;
   padding: 28px 34px;
   max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .conteudo h1 {
@@ -263,6 +273,83 @@ textarea {
   color: var(--muted);
   font-size: 13px;
   margin-bottom: 22px;
+}
+
+/* Painel: imagem oficial RodaCoop como fundo de tela cheia, cards por cima
+   (mesmo conceito do painel de referência). */
+.area-conteudo {
+  flex: 1;
+}
+
+.area-conteudo-fundo {
+  background:
+    linear-gradient(180deg, rgba(11, 31, 58, 0.45), rgba(11, 31, 58, 0.7)),
+    url("/fundo-rodacoop.jpg") center/cover no-repeat fixed;
+}
+
+.area-conteudo-fundo .hero-painel {
+  background: transparent;
+  box-shadow: none;
+  padding: 4px 0 0;
+}
+
+.area-conteudo-fundo .hero-painel h1 {
+  font-size: 28px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.area-conteudo-fundo .abas {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 9px;
+  padding: 4px;
+  border-bottom: none;
+}
+
+.area-conteudo-fundo .abas button {
+  border-radius: 6px;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.area-conteudo-fundo .abas button.ativo {
+  background: var(--navy);
+  color: #fff;
+}
+
+.area-conteudo-fundo .painel,
+.area-conteudo-fundo .card-stat {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.area-conteudo-fundo .carregando,
+.area-conteudo-fundo > .conteudo > .vazio {
+  color: #e6ebf5;
+}
+
+.barra-disp {
+  position: relative;
+  background: #eef1f8;
+  border-radius: 999px;
+  height: 18px;
+  min-width: 110px;
+  overflow: hidden;
+}
+
+.barra-disp-preenchida {
+  background: var(--success);
+  height: 100%;
+}
+
+.barra-disp span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--navy);
 }
 
 .hero-painel {

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, mensagemErro } from "../api";
-import { useAuth } from "../auth";
+import { useAuth, PAPEIS_ADMIN } from "../auth";
 
 interface Manutencao {
   id: string;
@@ -21,6 +21,12 @@ const PODE_CRIAR = ["superadmin", "admin", "gestor_base"];
 export default function ManutencoesPage() {
   const { usuario } = useAuth();
   const podeCriar = !!usuario && PODE_CRIAR.includes(usuario.role);
+  const podeEditar = !!usuario && (PAPEIS_ADMIN as readonly string[]).includes(usuario.role);
+
+  const [editando, setEditando] = useState<Manutencao | null>(null);
+  const [formEdit, setFormEdit] = useState<Partial<Manutencao>>({});
+  const [salvandoEdit, setSalvandoEdit] = useState(false);
+  const [erroEdit, setErroEdit] = useState<string | null>(null);
 
   const [lista, setLista] = useState<Manutencao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -75,6 +81,38 @@ export default function ManutencoesPage() {
       setErroForm(mensagemErro(err, "Não foi possível registrar a manutenção."));
     } finally {
       setSalvando(false);
+    }
+  }
+
+  function abrirEdicao(m: Manutencao) {
+    setEditando(m);
+    setFormEdit({
+      tipo: m.tipo,
+      descricao: m.descricao,
+      oficina: m.oficina,
+      data_saida: m.data_saida ? m.data_saida.slice(0, 10) : null,
+      custo: m.custo,
+      status: m.status,
+    });
+    setErroEdit(null);
+  }
+
+  async function salvarEdicao() {
+    if (!editando) return;
+    setSalvandoEdit(true);
+    setErroEdit(null);
+    try {
+      await api.patch(`/maintenance/${editando.id}`, {
+        ...formEdit,
+        custo: formEdit.custo !== undefined ? Number(formEdit.custo) : undefined,
+        data_saida: formEdit.data_saida || null,
+      });
+      setEditando(null);
+      carregar();
+    } catch (err) {
+      setErroEdit(mensagemErro(err, "Não foi possível salvar as alterações."));
+    } finally {
+      setSalvandoEdit(false);
     }
   }
 
@@ -169,6 +207,7 @@ export default function ManutencoesPage() {
                 <th>Saída</th>
                 <th>Custo</th>
                 <th>Status</th>
+                {podeEditar && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -189,12 +228,79 @@ export default function ManutencoesPage() {
                       {m.status}
                     </span>
                   </td>
+                  {podeEditar && (
+                    <td>
+                      <button className="btn btn-secundario" onClick={() => abrirEdicao(m)}>
+                        Editar
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {editando && (
+        <div className="modal-fundo" onClick={() => setEditando(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Editar manutenção — {editando.placa}</h2>
+            {erroEdit && <div className="erro">{erroEdit}</div>}
+            <div className="campo">
+              <label>Status</label>
+              <select
+                value={formEdit.status ?? ""}
+                onChange={(e) => setFormEdit((f) => ({ ...f, status: e.target.value }))}
+              >
+                <option value="Em andamento">Em andamento</option>
+                <option value="Concluída">Concluída</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+            </div>
+            <div className="campo">
+              <label>Oficina</label>
+              <input
+                value={formEdit.oficina ?? ""}
+                onChange={(e) => setFormEdit((f) => ({ ...f, oficina: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Descrição</label>
+              <input
+                value={formEdit.descricao ?? ""}
+                onChange={(e) => setFormEdit((f) => ({ ...f, descricao: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Data de saída</label>
+              <input
+                type="date"
+                value={formEdit.data_saida ?? ""}
+                onChange={(e) => setFormEdit((f) => ({ ...f, data_saida: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Custo (R$)</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={formEdit.custo ?? ""}
+                onChange={(e) => setFormEdit((f) => ({ ...f, custo: e.target.value as any }))}
+              />
+            </div>
+            <div className="acoes">
+              <button className="btn btn-secundario" onClick={() => setEditando(null)}>
+                Cancelar
+              </button>
+              <button className="btn btn-primario" onClick={salvarEdicao} disabled={salvandoEdit}>
+                {salvandoEdit ? "Salvando..." : "Salvar alterações"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

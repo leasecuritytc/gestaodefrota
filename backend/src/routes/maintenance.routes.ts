@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { withRole } from "../db";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { registrarAuditoria } from "../audit";
 
 export const maintenanceRouter = Router();
 maintenanceRouter.use(requireAuth);
@@ -76,4 +77,62 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
     )
   );
   res.status(201).json(result.rows[0]);
+});
+
+// Edição geral (concluir manutenção, corrigir custo/oficina/descrição).
+// Decisão do dono do projeto (24/11/2026): CRUD completo é só admin/superadmin
+// — mais restrito que o registro inicial (que já inclui gestor_base).
+const updateSchema = z.object({
+  tipo: z.enum(["Preventiva", "Corretiva", "Outros"]).optional(),
+  descricao: z.string().nullable().optional(),
+  oficina: z.string().nullable().optional(),
+  data_saida: z.string().nullable().optional(),
+  custo: z.number().min(0).optional(),
+  status: z.enum(["Em andamento", "Concluída", "Cancelada"]).optional(),
+});
+
+maintenanceRouter.patch("/:id", requireRole("superadmin", "admin"), async (req, res) => {
+  const parsed = updateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+  const campos = parsed.data;
+  if (Object.keys(campos).length === 0) {
+    return res.status(400).json({ error: "Nada para atualizar." });
+  }
+
+  try {
+    const resultado = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+      const atual = await c.query(`SELECT * FROM maintenance_records WHERE id = $1`, [req.params.id]);
+      if (!atual.rows[0]) {
+        throw Object.assign(new Error("Manutenção não encontrada."), { httpStatus: 404 });
+      }
+
+      const sets: string[] = [];
+      const valores: unknown[] = [];
+      let i = 1;
+      for (const [campo, valor] of Object.entries(campos)) {
+        sets.push(`${campo} = $${i}`);
+        valores.push(valor);
+        i++;
+      }
+      valores.push(req.params.id);
+
+      const row = await c.query(
+        `UPDATE maintenance_records SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`,
+        valores
+      );
+      await registrarAuditoria(c, req.auth!.sub, "editar_manutencao", "maintenance_records", req.params.id, {
+        placa: atual.rows[0].placa,
+        campos_alterados: campos,
+      });
+      return row.rows[0];
+    });
+    res.json(resultado);
+  } catch (err: any) {
+    if (err.httpStatus) {
+      return res.status(err.httpStatus).json({ error: err.message });
+    }
+    throw err;
+  }
 });

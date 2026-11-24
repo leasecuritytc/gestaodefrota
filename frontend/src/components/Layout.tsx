@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 
 const ITENS_MENU: { to: string; label: string; papeis?: string[] }[] = [
@@ -7,6 +7,7 @@ const ITENS_MENU: { to: string; label: string; papeis?: string[] }[] = [
   { to: "/manutencoes", label: "Manutenções" },
   { to: "/ocorrencias", label: "Ocorrências" },
   { to: "/bases", label: "Bases", papeis: ["superadmin", "admin"] },
+  { to: "/motoristas", label: "Motoristas", papeis: ["superadmin", "admin"] },
   { to: "/usuarios", label: "Usuários", papeis: ["superadmin", "admin"] },
   { to: "/auditoria", label: "Auditoria", papeis: ["superadmin", "admin"] },
 ];
@@ -19,9 +20,14 @@ const NOMES_PAPEL: Record<string, string> = {
   motorista: "Motorista",
 };
 
+// Navbar horizontal no topo (em vez do menu lateral) — no estilo do painel
+// de referência da RodaCoop: faixa de risco, logo+título à esquerda, links
+// em linha, usuário/sair à direita.
 export default function Layout() {
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const noPainel = location.pathname === "/";
 
   function sair() {
     logout();
@@ -33,14 +39,17 @@ export default function Layout() {
   );
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="faixa-risco" aria-hidden="true" />
-        <div className="marca">
-          <strong>🚛 GESTÃO DE FROTA</strong>
-          <span>RodaCoop — O melhor sempre vai chegar.</span>
+    <div className="app-shell-navbar">
+      <div className="faixa-risco" aria-hidden="true" />
+      <header className="navbar">
+        <div className="navbar-marca">
+          <span className="navbar-logo" aria-hidden="true">🚛</span>
+          <div>
+            <strong>GESTÃO DE FROTA</strong>
+            <span className="navbar-subtitulo">RodaCoop — O melhor sempre vai chegar.</span>
+          </div>
         </div>
-        <nav>
+        <nav className="navbar-links">
           {itensVisiveis.map((item) => (
             <NavLink
               key={item.to}
@@ -52,15 +61,19 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="rodape">
-          <div>{usuario?.full_name ?? usuario?.email}</div>
-          <div>{usuario ? NOMES_PAPEL[usuario.role] ?? usuario.role : ""}</div>
-          <button onClick={sair}>Sair</button>
+        <div className="navbar-usuario">
+          <div className="navbar-usuario-nome">{usuario?.full_name ?? usuario?.email}</div>
+          <div className="navbar-usuario-papel">{usuario ? NOMES_PAPEL[usuario.role] ?? usuario.role : ""}</div>
+          <button className="btn btn-secundario" onClick={sair}>
+            Sair
+          </button>
         </div>
-      </aside>
-      <main className="conteudo">
-        <Outlet />
-      </main>
+      </header>
+      <div className={`area-conteudo${noPainel ? " area-conteudo-fundo" : ""}`}>
+        <main className="conteudo">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

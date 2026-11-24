@@ -97,6 +97,15 @@ export default function UsuariosPage() {
     }
   }
 
+  async function alternarAtivo(id: string, atual: boolean) {
+    try {
+      await api.patch(`/users/${id}`, { active: !atual });
+      carregar();
+    } catch (err) {
+      setErro(mensagemErro(err, "Não foi possível alterar o usuário."));
+    }
+  }
+
   return (
     <>
       <h1>Usuários</h1>
@@ -190,6 +199,7 @@ export default function UsuariosPage() {
                     <span className={`tag ${u.ativado_em ? "tag-ativo" : "tag-manutencao"}`}>
                       {u.ativado_em ? "Ativado" : "Convite pendente"}
                     </span>
+                    {!u.active && <span className="tag tag-inativo" style={{ marginLeft: 4 }}>Desativado</span>}
                   </td>
                   {usuario?.role === "superadmin" && (
                     <td>
@@ -205,10 +215,15 @@ export default function UsuariosPage() {
                       )}
                     </td>
                   )}
-                  <td>
+                  <td style={{ display: "flex", gap: 6 }}>
                     {!u.ativado_em && (
                       <button className="btn btn-secundario" onClick={() => reenviarConvite(u.id)}>
                         Reenviar convite
+                      </button>
+                    )}
+                    {u.role !== "superadmin" && (
+                      <button className="btn btn-secundario" onClick={() => alternarAtivo(u.id, u.active)}>
+                        {u.active ? "Desativar" : "Reativar"}
                       </button>
                     )}
                   </td>
