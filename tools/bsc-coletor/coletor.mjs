@@ -171,7 +171,7 @@ async function enviar(pagina, dados) {
   const corpo = {
     pagina,
     linhas,
-    tabelas: dados.tabelas.slice(0, 30).map((t) => t.slice(0, 1500).map((r) => r.slice(0, 50))),
+    tabelas: dados.tabelas.slice(0, 30).map((t) => t.slice(0, 1500).map((r) => r.slice(0, 50).map((c) => String(c).slice(0, 400)))),
     numeros: detectarNumeros(linhas).slice(0, 1500),
   };
   const r = await fetch(`${API_URL}/api/bsc/ingest`, {
