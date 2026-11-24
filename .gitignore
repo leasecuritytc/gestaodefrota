@@ -3,3 +3,8 @@ dist/
 .env
 *.log
 .DS_Store
+
+tools/bsc-coletor/perfil/
+tools/bsc-coletor/.env
+tools/bsc-coletor/node_modules/
+tools/bsc-coletor/erro-*.png

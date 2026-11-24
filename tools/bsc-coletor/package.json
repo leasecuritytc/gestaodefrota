@@ -1,0 +1,15 @@
+{
+  "name": "bsc-coletor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Coleta retratos do BSC (Looker Studio) e envia para a GESTÃO DE FROTA",
+  "scripts": {
+    "login": "node coletor.mjs login",
+    "coletar": "node coletor.mjs coletar",
+    "instalar": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}

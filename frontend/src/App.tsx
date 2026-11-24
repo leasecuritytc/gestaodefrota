@@ -14,6 +14,7 @@ import UsuariosPage from "./pages/UsuariosPage";
 import AuditoriaPage from "./pages/AuditoriaPage";
 import BasesPage from "./pages/BasesPage";
 import MotoristasPage from "./pages/MotoristasPage";
+import BscPage from "./pages/BscPage";
 
 export default function App() {
   return (
@@ -48,6 +49,14 @@ export default function App() {
             element={
               <ProtectedRoute papeis={["superadmin", "admin"]}>
                 <AuditoriaPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="bsc"
+            element={
+              <ProtectedRoute papeis={["superadmin", "admin"]}>
+                <BscPage />
               </ProtectedRoute>
             }
           />
