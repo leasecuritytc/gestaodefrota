@@ -12,6 +12,7 @@ import ManutencoesPage from "./pages/ManutencoesPage";
 import OcorrenciasPage from "./pages/OcorrenciasPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import AuditoriaPage from "./pages/AuditoriaPage";
+import BasesPage from "./pages/BasesPage";
 
 export default function App() {
   return (
@@ -46,6 +47,14 @@ export default function App() {
             element={
               <ProtectedRoute papeis={["superadmin", "admin"]}>
                 <AuditoriaPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="bases"
+            element={
+              <ProtectedRoute papeis={["superadmin", "admin"]}>
+                <BasesPage />
               </ProtectedRoute>
             }
           />

@@ -54,6 +54,67 @@ vehiclesRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), asyn
   }
 });
 
+// CRUD de verdade: edição geral do veículo (status, tipo, rentadora,
+// transportadora, subregiao, observações, chassi). Decisão do dono do
+// projeto (24/11/2026): essa edição é só de superadmin e admin — mais
+// restrita que a troca de motorista (que já inclui gestor_base).
+const updateVeiculoSchema = z.object({
+  chassi: z.string().nullable().optional(),
+  tipo: z.string().nullable().optional(),
+  rentadora: z.string().nullable().optional(),
+  transportadora: z.string().nullable().optional(),
+  subregiao: z.string().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+  status: z.enum(["Ativa", "Manutenção", "Desmobilizado", "Sem cooperado"]).optional(),
+  base: z.string().min(1).optional(),
+});
+
+vehiclesRouter.patch("/:id", requireRole("superadmin", "admin"), async (req, res) => {
+  const parsed = updateVeiculoSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+  const campos = parsed.data;
+  if (Object.keys(campos).length === 0) {
+    return res.status(400).json({ error: "Nada para atualizar." });
+  }
+
+  try {
+    const resultado = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+      const atual = await c.query(`SELECT * FROM vehicles WHERE id = $1`, [req.params.id]);
+      if (!atual.rows[0]) {
+        throw Object.assign(new Error("Veículo não encontrado."), { httpStatus: 404 });
+      }
+
+      const sets: string[] = [];
+      const valores: unknown[] = [];
+      let i = 1;
+      for (const [campo, valor] of Object.entries(campos)) {
+        sets.push(`${campo} = $${i}`);
+        valores.push(valor);
+        i++;
+      }
+      valores.push(req.params.id);
+
+      const row = await c.query(
+        `UPDATE vehicles SET ${sets.join(", ")}, updated_at = now() WHERE id = $${i} RETURNING *`,
+        valores
+      );
+      await registrarAuditoria(c, req.auth!.sub, "editar_veiculo", "vehicles", req.params.id, {
+        placa: atual.rows[0].placa,
+        campos_alterados: campos,
+      });
+      return row.rows[0];
+    });
+    res.json(resultado);
+  } catch (err: any) {
+    if (err.httpStatus) {
+      return res.status(err.httpStatus).json({ error: err.message });
+    }
+    throw err;
+  }
+});
+
 // Troca o motorista atual de um veículo. Liberado para gestor_base, admin e
 // superadmin (decisão do dono do projeto, 24/11/2026) — RLS (vehicles_update
 // em 002_rls.sql) já restringe a esses três papéis; esta checagem na rota é

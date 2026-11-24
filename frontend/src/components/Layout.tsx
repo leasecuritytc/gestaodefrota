@@ -6,6 +6,7 @@ const ITENS_MENU: { to: string; label: string; papeis?: string[] }[] = [
   { to: "/veiculos", label: "Veículos" },
   { to: "/manutencoes", label: "Manutenções" },
   { to: "/ocorrencias", label: "Ocorrências" },
+  { to: "/bases", label: "Bases", papeis: ["superadmin", "admin"] },
   { to: "/usuarios", label: "Usuários", papeis: ["superadmin", "admin"] },
   { to: "/auditoria", label: "Auditoria", papeis: ["superadmin", "admin"] },
 ];
@@ -34,9 +35,10 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
+        <div className="faixa-risco" aria-hidden="true" />
         <div className="marca">
-          <strong>GESTÃO DE FROTA</strong>
-          <span>RodaCoop</span>
+          <strong>🚛 GESTÃO DE FROTA</strong>
+          <span>RodaCoop — O melhor sempre vai chegar.</span>
         </div>
         <nav>
           {itensVisiveis.map((item) => (

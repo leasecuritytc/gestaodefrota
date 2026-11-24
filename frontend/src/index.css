@@ -1,7 +1,8 @@
 :root {
   --navy: #0b1f3a;
   --navy-2: #122a4d;
-  --accent: #2563eb;
+  --accent: #e07b1e;
+  --accent-forte: #ff8c1a;
   --accent-2: #38bdf8;
   --bg: #f4f6fb;
   --card: #ffffff;
@@ -9,7 +10,18 @@
   --muted: #5b6477;
   --danger: #c0392b;
   --success: #1e8e5a;
+  --warning: #e08a1e;
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+}
+
+/* Faixa de risco (hazard stripe) — identidade visual RodaCoop */
+.faixa-risco {
+  height: 8px;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--accent-forte) 0 10px,
+    #111827 10px 20px
+  );
 }
 
 * {
@@ -173,6 +185,10 @@ textarea {
   padding: 18px 0;
 }
 
+.sidebar .faixa-risco {
+  margin: -18px 0 14px;
+}
+
 .sidebar .marca {
   padding: 0 20px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -249,6 +265,62 @@ textarea {
   margin-bottom: 22px;
 }
 
+.hero-painel {
+  background:
+    linear-gradient(180deg, rgba(11, 31, 58, 0.55), rgba(11, 31, 58, 0.92)),
+    url("/fundo-rodacoop.jpg") center 25%/cover no-repeat;
+  border-radius: 14px;
+  padding: 26px 30px;
+  margin-bottom: 22px;
+  box-shadow: 0 10px 30px rgba(11, 31, 58, 0.25);
+}
+
+.hero-painel h1 {
+  color: #fff;
+  margin: 0 0 4px;
+  font-size: 24px;
+  letter-spacing: 0.3px;
+}
+
+.hero-painel .descricao-pagina {
+  color: #d8deed;
+  margin-bottom: 0;
+}
+
+.abas {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid #e4e8f2;
+}
+
+.abas button {
+  background: none;
+  border: none;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.abas button.ativo {
+  color: var(--navy);
+  border-bottom-color: var(--accent);
+}
+
+.grade-2col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.cards-resumo-secundarios {
+  margin-top: -8px;
+}
+
 .cards-resumo {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -258,22 +330,43 @@ textarea {
 
 .card-stat {
   background: var(--card);
-  border-radius: 10px;
+  border-radius: 8px;
+  border-left: 4px solid #d3d9e6;
   padding: 16px 18px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .card-stat .valor {
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
   color: var(--navy);
+  font-variant-numeric: tabular-nums;
 }
 
 .card-stat .rotulo {
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
   color: var(--muted);
+  margin-top: 4px;
+}
+
+.card-stat .rotulo-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--success);
   margin-top: 2px;
 }
+
+.card-stat-navy { border-left-color: var(--navy); }
+.card-stat-success { border-left-color: var(--success); }
+.card-stat-warning { border-left-color: var(--warning); }
+.card-stat-muted { border-left-color: var(--muted); }
+.card-stat-danger { border-left-color: var(--danger); }
 
 .painel {
   background: var(--card);

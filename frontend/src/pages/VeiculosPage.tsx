@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, mensagemErro } from "../api";
-import { useAuth } from "../auth";
+import { useAuth, PAPEIS_ADMIN } from "../auth";
 
 interface Veiculo {
   id: string;
@@ -28,10 +28,12 @@ function tagClasse(status: string) {
 }
 
 const PAPEIS_QUE_TROCAM_MOTORISTA = ["superadmin", "admin", "gestor_base"];
+const STATUS_OPCOES = ["Ativa", "Manutenção", "Desmobilizado", "Sem cooperado"];
 
 export default function VeiculosPage() {
   const { usuario } = useAuth();
   const podeTrocarMotorista = !!usuario && PAPEIS_QUE_TROCAM_MOTORISTA.includes(usuario.role);
+  const podeEditar = !!usuario && (PAPEIS_ADMIN as readonly string[]).includes(usuario.role);
 
   const [veiculos, setVeiculos] = useState<Veiculo[] | null>(null);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -43,6 +45,11 @@ export default function VeiculosPage() {
   const [novoMotoristaId, setNovoMotoristaId] = useState<string>("");
   const [salvando, setSalvando] = useState(false);
   const [erroModal, setErroModal] = useState<string | null>(null);
+
+  const [editandoDados, setEditandoDados] = useState<Veiculo | null>(null);
+  const [formDados, setFormDados] = useState<Partial<Veiculo>>({});
+  const [salvandoDados, setSalvandoDados] = useState(false);
+  const [erroModalDados, setErroModalDados] = useState<string | null>(null);
 
   function carregar() {
     api
@@ -95,6 +102,35 @@ export default function VeiculosPage() {
     }
   }
 
+  function abrirEdicaoDados(v: Veiculo) {
+    setEditandoDados(v);
+    setFormDados({
+      status: v.status,
+      base: v.base,
+      tipo: v.tipo,
+      rentadora: v.rentadora,
+      transportadora: v.transportadora,
+      subregiao: v.subregiao,
+      observacoes: v.observacoes,
+    });
+    setErroModalDados(null);
+  }
+
+  async function salvarDados() {
+    if (!editandoDados) return;
+    setSalvandoDados(true);
+    setErroModalDados(null);
+    try {
+      await api.patch(`/vehicles/${editandoDados.id}`, formDados);
+      setEditandoDados(null);
+      carregar();
+    } catch (err) {
+      setErroModalDados(mensagemErro(err, "Não foi possível salvar as alterações."));
+    } finally {
+      setSalvandoDados(false);
+    }
+  }
+
   return (
     <>
       <h1>Veículos</h1>
@@ -141,7 +177,7 @@ export default function VeiculosPage() {
                 <th>Rentadora</th>
                 <th>Motorista atual</th>
                 <th>Observações</th>
-                {podeTrocarMotorista && <th></th>}
+                {(podeTrocarMotorista || podeEditar) && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -157,11 +193,18 @@ export default function VeiculosPage() {
                   <td>{v.rentadora ?? "—"}</td>
                   <td>{v.motorista_nome ?? "Sem cooperado"}</td>
                   <td>{v.observacoes ?? "—"}</td>
-                  {podeTrocarMotorista && (
-                    <td>
-                      <button className="btn btn-secundario" onClick={() => abrirTroca(v)}>
-                        Trocar motorista
-                      </button>
+                  {(podeTrocarMotorista || podeEditar) && (
+                    <td style={{ display: "flex", gap: 6 }}>
+                      {podeTrocarMotorista && (
+                        <button className="btn btn-secundario" onClick={() => abrirTroca(v)}>
+                          Trocar motorista
+                        </button>
+                      )}
+                      {podeEditar && (
+                        <button className="btn btn-secundario" onClick={() => abrirEdicaoDados(v)}>
+                          Editar
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -200,6 +243,80 @@ export default function VeiculosPage() {
               </button>
               <button className="btn btn-primario" onClick={salvarTroca} disabled={salvando}>
                 {salvando ? "Salvando..." : "Confirmar troca"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editandoDados && (
+        <div className="modal-fundo" onClick={() => setEditandoDados(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Editar veículo — {editandoDados.placa}</h2>
+            {erroModalDados && <div className="erro">{erroModalDados}</div>}
+            <div className="campo">
+              <label>Status</label>
+              <select
+                value={formDados.status ?? ""}
+                onChange={(e) => setFormDados((f) => ({ ...f, status: e.target.value }))}
+              >
+                {STATUS_OPCOES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="campo">
+              <label>Base</label>
+              <input
+                value={formDados.base ?? ""}
+                onChange={(e) => setFormDados((f) => ({ ...f, base: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Tipo</label>
+              <input
+                value={formDados.tipo ?? ""}
+                onChange={(e) => setFormDados((f) => ({ ...f, tipo: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Rentadora</label>
+              <input
+                value={formDados.rentadora ?? ""}
+                onChange={(e) => setFormDados((f) => ({ ...f, rentadora: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Transportadora</label>
+              <input
+                value={formDados.transportadora ?? ""}
+                onChange={(e) => setFormDados((f) => ({ ...f, transportadora: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Subregião</label>
+              <input
+                value={formDados.subregiao ?? ""}
+                onChange={(e) => setFormDados((f) => ({ ...f, subregiao: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Observações</label>
+              <textarea
+                rows={3}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d3d9e6", borderRadius: 8, fontFamily: "inherit" }}
+                value={formDados.observacoes ?? ""}
+                onChange={(e) => setFormDados((f) => ({ ...f, observacoes: e.target.value }))}
+              />
+            </div>
+            <div className="acoes">
+              <button className="btn btn-secundario" onClick={() => setEditandoDados(null)}>
+                Cancelar
+              </button>
+              <button className="btn btn-primario" onClick={salvarDados} disabled={salvandoDados}>
+                {salvandoDados ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
           </div>
