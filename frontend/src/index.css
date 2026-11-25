@@ -950,3 +950,53 @@ code.copiavel {
   .lat-mobile * { margin-top: 0; }
   .lat-mobile .topbar-hamb { display: inline-flex; }
 }
+
+/* ===== Ajustes para smartphone ===== */
+html, body { max-width: 100%; overflow-x: hidden; }
+.conteudo { min-width: 0; }
+@media (max-width: 900px) {
+  .conteudo { padding: 16px 12px 24px; }
+  .conteudo h1 { font-size: 20px; }
+  .hero-painel { padding: 16px; }
+  /* Tabelas rolam na horizontal dentro do próprio cartão, sem alargar a página */
+  .conteudo table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  .painel { padding: 14px 12px; overflow-x: hidden; }
+  .grade-2col { grid-template-columns: 1fr !important; }
+  .cards-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .card-stat .valor { font-size: 26px; }
+  .barra-topo { flex-direction: column; align-items: stretch; gap: 10px; }
+  .barra-topo .filtros { display: flex; flex-wrap: wrap; gap: 8px; }
+  .barra-topo .filtros > * { flex: 1 1 140px; min-width: 0; }
+  .barra-topo > .btn, .barra-topo > button { width: 100% !important; }
+  .abas { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .abas button { white-space: nowrap; flex-shrink: 0; }
+  .modal { width: 94vw; max-width: 94vw; max-height: 90vh; overflow-y: auto; padding: 18px 16px; }
+  .modal .acoes { flex-wrap: wrap; }
+  .modal .acoes .btn { flex: 1 1 120px; }
+  /* Toque confortável e sem zoom automático do iPhone nos campos */
+  input, select, textarea { font-size: 16px !important; min-height: 44px; }
+  .btn, button { min-height: 40px; }
+  .mapa-area { height: 280px; }
+  .mapa-topo { flex-direction: column; align-items: stretch; }
+  .mapa-acoes select, .mapa-acoes .btn { width: 100%; }
+  /* Inspeções */
+  .insp-topo { flex-direction: column; }
+  .insp-topo .btn { width: 100% !important; white-space: normal; }
+  .insp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .insp-kpi strong { font-size: 24px; }
+  .insp-bases { grid-template-columns: 1fr; }
+  .insp-item-topo { flex-direction: column; align-items: stretch; }
+  .insp-seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+  .insp-seg button { min-height: 48px; }
+  .insp-fotos { flex-wrap: wrap; }
+  .insp-rodape { flex-wrap: wrap; justify-content: stretch; padding: 10px 12px; margin: 0 -12px; }
+  .insp-rodape span { flex: 1 1 100%; margin: 0 0 4px; }
+  .insp-rodape .btn { flex: 1 1 0; }
+  .insp-acoes { flex-wrap: wrap; white-space: normal; }
+  .insp-km { max-width: none; }
+}
+@media (max-width: 420px) {
+  .cards-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .insp-kpis { grid-template-columns: 1fr 1fr; }
+  .lateral { width: 84vw; }
+}
