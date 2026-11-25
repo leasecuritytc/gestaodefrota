@@ -14,6 +14,8 @@ checklistsProprioRouter.use(requireAuth);
 const LEITURA = requireRole("superadmin", "admin", "gestor_base", "leitor");
 const ESCRITA = requireRole("superadmin", "admin", "gestor_base");
 const DIAS_VENCIMENTO = 15;
+// Foto do odômetro: opcional durante a implantação. Para voltar a exigir, troque para true aqui e em FOTO_ODOMETRO_OBRIGATORIA no InspecoesPage.tsx.
+const FOTO_ODOMETRO_OBRIGATORIA = false;
 
 const h = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) =>
   fn(req, res).catch(next);
@@ -269,7 +271,7 @@ checklistsProprioRouter.post("/:id/concluir", ESCRITA, h(async (req, res) => {
     const min = await kmMinimoInfo(c, ex.vehicle_id, id);
     if (min && Number(ex.km) < min.valor) return { erro: 400, msg: msgKm(min) };
     const odo = await c.query(`SELECT count(*)::int AS n FROM checklist_fotos WHERE execucao_id = $1 AND tipo = 'odometro'`, [id]);
-    if (odo.rows[0].n < 1) return { erro: 400, msg: "Anexe a foto do odômetro (painel mostrando a quilometragem) para concluir." };
+    if (FOTO_ODOMETRO_OBRIGATORIA && odo.rows[0].n < 1) return { erro: 400, msg: "Anexe a foto do odômetro (painel mostrando a quilometragem) para concluir." };
 
     const falhas = itens.filter((i) => resp.get(i.id).resultado === "FALHA");
     const criticas = falhas.filter((i) => i.critico);

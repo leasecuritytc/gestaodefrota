@@ -16,6 +16,8 @@ const tagStatus = (s: string) => "tag tag-" + s.toLowerCase().replace(/\s+/g, "_
 type Situacao = "todos" | "vencido" | "emdia" | "rascunho";
 const FONTE_KM = { referencia: "km de referência (admin)", checklist: "último checklist", vec: "VEC" } as const;
 const MAX_BYTES = 700 * 1024;
+// Opcional durante a implantação; manter igual ao backend (checklistsProprios.routes.ts).
+const FOTO_ODOMETRO_OBRIGATORIA = false;
 
 // Reduz a foto escolhida no aparelho (lado maior 1280 px, JPEG) para caber no envio.
 async function comprimir(file: File): Promise<Blob> {
@@ -91,11 +93,11 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   const fotoOdo = det?.fotos.find((f) => f.tipo === "odometro");
   const kmNum = km === "" ? null : Number(km);
   const kmBaixo = kmNum != null && det?.km_minimo != null && kmNum < det.km_minimo;
-  const podeConcluir = respondidos >= itens.length && kmNum != null && !kmBaixo && !!fotoOdo;
+  const podeConcluir = respondidos >= itens.length && kmNum != null && !kmBaixo && (!FOTO_ODOMETRO_OBRIGATORIA || !!fotoOdo);
   const pendencias = [
     respondidos < itens.length ? `${itens.length - respondidos} item(ns) sem resposta` : null,
     kmNum == null ? "informe a quilometragem" : kmBaixo ? "quilometragem menor que a anterior" : null,
-    !fotoOdo ? "foto do odômetro" : null,
+    FOTO_ODOMETRO_OBRIGATORIA && !fotoOdo ? "foto do odômetro" : null,
   ].filter(Boolean);
 
   const corpo = () => ({
@@ -172,7 +174,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
       )}
       <div className="painel">
         <h2>Odômetro</h2>
-        <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Confira o número no painel do veículo e digite exatamente como aparece. A foto precisa mostrar a quilometragem legível. O km não pode ser menor que o já registrado. Depois de concluída a inspeção, só um admin pode corrigir o km.</span></div>
+        <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Confira o número no painel do veículo e digite exatamente como aparece. {FOTO_ODOMETRO_OBRIGATORIA ? "A foto precisa mostrar a quilometragem legível. " : "A foto do painel é opcional por enquanto, mas ajuda na conferência. "}O km não pode ser menor que o já registrado. Depois de concluída a inspeção, só um admin pode corrigir o km.</span></div>
         <label className="insp-km">Quilometragem (km) *
           <input type="number" inputMode="numeric" min={det.km_minimo ?? 0} value={km} disabled={leitura} onChange={(e) => setKm(e.target.value)} aria-invalid={kmBaixo} />
         </label>
@@ -180,7 +182,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
         {det.km_corrigido_em && <small className="insp-sub">Km corrigido por admin em {fmtData(det.km_corrigido_em)}{det.km_original ? ` (original: ${Number(det.km_original).toLocaleString("pt-BR")} km)` : ""}{det.km_observacao ? ` — “${det.km_observacao}”` : ""}.</small>}
         {kmBaixo && <div className="erro" role="alert" style={{ marginTop: 8 }}>Quilometragem menor que a já lançada ({det.km_minimo!.toLocaleString("pt-BR")} km). Confira o odômetro.</div>}
         <div className="insp-fotos" style={{ marginTop: 12 }}>
-          <strong style={{ fontSize: 13 }}>Foto do odômetro (obrigatória) *</strong>
+          <strong style={{ fontSize: 13 }}>Foto do odômetro{FOTO_ODOMETRO_OBRIGATORIA ? " (obrigatória) *" : " (opcional)"}</strong>
           {fotoOdo && <Foto key={fotoOdo.id} id={fotoOdo.id} onRemover={leitura || editando ? undefined : () => removerFoto(fotoOdo.id)} />}
           {!leitura && !editando && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "odometro"; refArq.current?.click(); }}>{fotoOdo ? "📷 Trocar foto" : "📷 Fotografar odômetro"}</button>}
         </div>
