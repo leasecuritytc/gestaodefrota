@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { Rosca, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, mensagemErro } from "../api";
 import OperationalMap from "../components/OperationalMap";
-import { BarraEmpilhadaHorizontal, BarraVertical, LinhaEvolucao } from "../components/Charts";
+import { BarraEmpilhadaHorizontal, BarraVertical, LinhaEvolucao, Rosca } from "../components/Charts";
 
 interface Relatorios {
   resumo_por_base: {
@@ -120,6 +120,7 @@ export default function DashboardPage() {
             <div className="card-stat card-stat-navy">
               <div className="valor">{totalVeiculos}</div>
               <div className="rotulo">Veículos</div>
+              <div className="kpi-barra" aria-hidden="true"><span style={{ width: "100%", background: "var(--ink)" }} /></div>
             </div>
             <div className="card-stat card-stat-success">
               <div className="valor">{porStatusMapa["Ativa"] ?? 0}</div>
@@ -131,18 +132,25 @@ export default function DashboardPage() {
                   </span>
                 )}
               </div>
+              <div className="kpi-barra" aria-hidden="true"><span style={{ width: `${totalVeiculos ? Math.round(((porStatusMapa["Ativa"] ?? 0) / totalVeiculos) * 100) : 0}%`, background: "#10b981" }} /></div>
             </div>
             <div className="card-stat card-stat-warning">
               <div className="valor">{porStatusMapa["Manutenção"] ?? 0}</div>
               <div className="rotulo">Manutenção</div>
+              {resumo.manutencoes_abertas > 0 && (
+                <span className="kpi-selo">{resumo.manutencoes_abertas} OS abertas</span>
+              )}
+              <div className="kpi-barra" aria-hidden="true"><span style={{ width: `${totalVeiculos ? Math.round(((porStatusMapa["Manutenção"] ?? 0) / totalVeiculos) * 100) : 0}%`, background: "#f59e0b" }} /></div>
             </div>
             <div className="card-stat card-stat-muted">
               <div className="valor">{porStatusMapa["Desmobilizado"] ?? 0}</div>
               <div className="rotulo">Desmobilizados</div>
+              <div className="kpi-barra" aria-hidden="true"><span style={{ width: `${totalVeiculos ? Math.round(((porStatusMapa["Desmobilizado"] ?? 0) / totalVeiculos) * 100) : 0}%`, background: "#64748b" }} /></div>
             </div>
             <div className="card-stat card-stat-danger">
               <div className="valor">{porStatusMapa["Sem cooperado"] ?? 0}</div>
               <div className="rotulo">Sem cooperado</div>
+              <div className="kpi-barra" aria-hidden="true"><span style={{ width: `${totalVeiculos ? Math.round(((porStatusMapa["Sem cooperado"] ?? 0) / totalVeiculos) * 100) : 0}%`, background: "#ef4444" }} /></div>
             </div>
           </div>
 
@@ -159,7 +167,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="painel">
                   <h2>Veículos por tipo</h2>
-                  <BarraVertical dados={(resumo.por_tipo ?? []).map((t) => ({ rotulo: t.tipo, valor: t.total }))} />
+                  <Rosca dados={(resumo.por_tipo ?? []).map((t) => ({ rotulo: t.tipo, valor: t.total }))} />
                 </div>
               </div>
 

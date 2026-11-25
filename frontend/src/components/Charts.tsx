@@ -81,10 +81,16 @@ export function BarraEmpilhadaHorizontal({
                 role="img"
                 aria-label={`${d.grupo}: ${total} veículos`}
               >
+                <defs>
+                  <clipPath id={`clip-${d.grupo}`}>
+                    <rect x={0} y={0} width={largura} height={altura} rx={4} />
+                  </clipPath>
+                </defs>
                 <rect x={0} y={0} width={largura} height={altura} rx={4} fill="var(--surface-2)" />
                 {marcas.slice(1).map((m) => (
                   <line key={m} x1={m * largura} y1={0} x2={m * largura} y2={altura} stroke="var(--grid)" strokeWidth={0.5} />
                 ))}
+                <g clipPath={`url(#clip-${d.grupo})`}>
                 {(() => {
                   let x = 0;
                   return seriesOrdem
@@ -102,6 +108,7 @@ export function BarraEmpilhadaHorizontal({
                       return rect;
                     });
                 })()}
+                </g>
               </svg>
               <div style={{ width: 28, textAlign: "right", fontSize: 12, fontWeight: 700, color: "var(--muted)", flexShrink: 0 }}>
                 {total}
@@ -213,5 +220,62 @@ export function LinhaEvolucao({ pontos, cor = "#ff6b00", altura = 160 }: LinhaEv
         );
       })}
     </svg>
+  );
+}
+
+const PALETA_DONUT = ["#ff6b00", "#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#14b8a6", "#64748b"];
+
+// Rosca com o total no centro e legenda com valores.
+export function Rosca({ dados }: { dados: { rotulo: string; valor: number }[] }) {
+  const total = dados.reduce((a, d) => a + d.valor, 0);
+  if (total === 0) return <p className="vazio">Sem dados.</p>;
+  const r = 52;
+  const c = 2 * Math.PI * r;
+  let acumulado = 0;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+      <svg viewBox="0 0 140 140" width={160} height={160} role="img" aria-label={`Veículos por tipo: total ${total}`}>
+        <g transform="rotate(-90 70 70)">
+          <circle cx={70} cy={70} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={20} />
+          {dados.map((d, i) => {
+            const len = (d.valor / total) * c;
+            const el = (
+              <circle
+                key={d.rotulo}
+                cx={70}
+                cy={70}
+                r={r}
+                fill="none"
+                stroke={PALETA_DONUT[i % PALETA_DONUT.length]}
+                strokeWidth={20}
+                strokeDasharray={`${Math.max(0, len - 1.5)} ${c}`}
+                strokeDashoffset={-acumulado}
+              >
+                <title>
+                  {d.rotulo}: {d.valor}
+                </title>
+              </circle>
+            );
+            acumulado += len;
+            return el;
+          })}
+        </g>
+        <text x={70} y={70} textAnchor="middle" fontSize="26" fontWeight="800" fill="var(--ink)">
+          {total}
+        </text>
+        <text x={70} y={88} textAnchor="middle" fontSize="10" fill="var(--muted)">
+          veículos
+        </text>
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, color: "var(--ink)" }}>
+        {dados.map((d, i) => (
+          <div key={d.rotulo} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: PALETA_DONUT[i % PALETA_DONUT.length] }} aria-hidden="true" />
+            <span>{d.rotulo}</span>
+            <strong style={{ marginLeft: "auto", paddingLeft: 12 }}>{d.valor}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
