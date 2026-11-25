@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api, mensagemErro } from "../api";
 import { useAuth } from "../auth";
+import VideoFundo from "../components/VideoFundo";
 
 export default function AtivarContaPage() {
   const [params] = useSearchParams();
@@ -50,6 +51,7 @@ export default function AtivarContaPage() {
   if (!token) {
     return (
       <div className="auth-shell">
+      <VideoFundo />
         <div className="auth-card">
           <h1>Link inválido</h1>
           <p className="subtitulo">
@@ -66,6 +68,7 @@ export default function AtivarContaPage() {
 
   return (
     <div className="auth-shell">
+      <VideoFundo />
       <form className="auth-card" onSubmit={onSubmit}>
         <h1>Ative sua conta</h1>
         <p className="subtitulo">

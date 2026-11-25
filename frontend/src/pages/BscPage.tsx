@@ -15,7 +15,7 @@ function fmtData(v: string) {
 }
 
 export default function BscPage() {
-  const [dados, setDados] = useState<{ configurado: boolean; paginas: Pagina[] } | null>(null);
+  const [dados, setDados] = useState<{ configurado: boolean; bases?: string[]; paginas: Pagina[] } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ativa, setAtiva] = useState<string | null>(null);
 
@@ -35,7 +35,7 @@ export default function BscPage() {
     <div>
       <h1>BSC — Scorecard do fornecedor</h1>
       <p className="subtitulo">
-        Retratos do relatório "2.0 SRM - BSC Supplier" (Mercado Livre), coletados automaticamente. Visível apenas para superadmin e admin.
+        Retratos do relatório "2.0 SRM - BSC Supplier" (Mercado Livre), coletados automaticamente e filtrados só para as bases {(dados?.bases ?? ["SMG3", "SMG5", "SMG9"]).join(", ")}. Visível apenas para superadmin e admin.
       </p>
       {erro && <p className="erro">{erro}</p>}
       {dados && !dados.configurado && (
@@ -66,7 +66,7 @@ export default function BscPage() {
                   ))}
                 </div>
               )}
-              {pagina.linhas.filter((l) => /^(Tabela \d+|Atualização|Coletado)/.test(l)).map((l, i) => (
+              {pagina.linhas.map((l, i) => (
                 <p className="subtitulo" key={`n${i}`}>{l}</p>
               ))}
               {pagina.tabelas.map((t, i) => (

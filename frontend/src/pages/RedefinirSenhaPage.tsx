@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, mensagemErro } from "../api";
+import VideoFundo from "../components/VideoFundo";
 
 export default function RedefinirSenhaPage() {
   const [params] = useSearchParams();
@@ -44,6 +45,7 @@ export default function RedefinirSenhaPage() {
   if (!token) {
     return (
       <div className="auth-shell">
+      <VideoFundo />
         <div className="auth-card">
           <h1>Link inválido</h1>
           <p className="subtitulo">Peça um novo link em "Esqueci minha senha".</p>
@@ -57,6 +59,7 @@ export default function RedefinirSenhaPage() {
 
   return (
     <div className="auth-shell">
+      <VideoFundo />
       <form className="auth-card" onSubmit={onSubmit}>
         <h1>Redefinir senha</h1>
         <p className="subtitulo">Este link vale por 1 hora e só pode ser usado uma vez.</p>

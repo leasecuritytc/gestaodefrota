@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, mensagemErro } from "../api";
+import VideoFundo from "../components/VideoFundo";
 
 export default function EsqueciSenhaPage() {
   const [email, setEmail] = useState("");
@@ -27,6 +28,7 @@ export default function EsqueciSenhaPage() {
 
   return (
     <div className="auth-shell">
+      <VideoFundo />
       <form className="auth-card" onSubmit={onSubmit}>
         <h1>Esqueci minha senha</h1>
         <p className="subtitulo">

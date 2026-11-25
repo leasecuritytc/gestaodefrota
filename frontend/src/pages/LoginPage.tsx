@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, mensagemErro } from "../api";
 import { useAuth } from "../auth";
+import VideoFundo from "../components/VideoFundo";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -28,6 +29,7 @@ export default function LoginPage() {
 
   return (
     <div className="auth-shell">
+      <VideoFundo />
       <form className="auth-card" onSubmit={onSubmit}>
         <h1>GESTÃO DE FROTA</h1>
         <p className="subtitulo">Entre com seu e-mail e senha para acessar a plataforma.</p>

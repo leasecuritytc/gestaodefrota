@@ -79,7 +79,7 @@ async function extrair(page) {
 
 // Tabelas do Looker (<upgraded-table>): só ~12 linhas ficam no DOM por vez (virtualização).
 // Rolamos a tabela com a roda do mouse e juntamos as linhas pelo índice; depois avançamos a página.
-const MAX_LINHAS_TABELA = Number(process.env.BSC_MAX_LINHAS_TABELA || 800);
+const MAX_LINHAS_TABELA = Number(process.env.BSC_MAX_LINHAS_TABELA || 2000);
 
 function limparCabecalho(t) {
   return t.replace(/[▲▼]/g, "").replace(/\s+/g, " ").trim().replace(/\s+\d+$/, "");
@@ -166,7 +166,34 @@ function detectarNumeros(linhas) {
   return out;
 }
 
+// Escopo: só as bases vinculadas (o servidor informa quais e as placas delas).
+let ESCOPO = null;
+async function carregarEscopo() {
+  const r = await fetch(`${API_URL}/api/bsc/placas`, { headers: { "x-ingest-token": TOKEN } });
+  if (!r.ok) throw new Error(`Não foi possível ler o escopo de bases (HTTP ${r.status}). Atualize a plataforma e confira BSC_INGEST_TOKEN.`);
+  const j = await r.json();
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  ESCOPO = {
+    bases: j.bases,
+    placas: new Set(j.placas),
+    reBase: new RegExp(`^(${j.bases.map(esc).join("|")})(?![0-9])`, "i"),
+  };
+  console.log(`Escopo: bases ${j.bases.join(", ")} · ${j.placas.length} placas`);
+}
+const limparCab2 = (t) => String(t).replace(/[▲▼]/g, "").replace(/\s+/g, " ").trim().replace(/\s+\d+$/, "").toLowerCase();
+const normPlaca2 = (v) => String(v ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+function filtrarTabelaEscopo(t) {
+  const cab = (t[0] || []).map(limparCab2);
+  const iBase = cab.map((c, i) => (/^(hub|hub_final|svc|svc_final|site|site_de_origem|unidade|base)(\b|_|$)/.test(c) ? i : -1)).filter((i) => i >= 0);
+  const iPlaca = cab.findIndex((c) => /^(placa|plate|plate_fleet|placa_do_veiculo)(\b|_|$)/.test(c));
+  if (!iBase.length && iPlaca < 0) return null; // total do fornecedor: não enviar
+  const dados = t.slice(1).filter((r) => (iBase.length ? iBase.some((i) => ESCOPO.reBase.test(String(r[i] ?? "").trim())) : ESCOPO.placas.has(normPlaca2(r[iPlaca]))));
+  return [t[0], ...dados];
+}
+
 async function enviar(pagina, dados) {
+  if (!ESCOPO) await carregarEscopo();
+  dados = { ...dados, tabelas: dados.tabelas.map(filtrarTabelaEscopo).filter(Boolean) };
   const linhas = dados.linhas.filter((l) => !NAV_IGNORAR.has(l)).slice(0, 4000);
   const corpo = {
     pagina,
