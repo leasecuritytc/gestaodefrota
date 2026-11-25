@@ -590,28 +590,6 @@ textarea {
   color: var(--ink);
 }
 
-.hero-painel {
-  background:
-    linear-gradient(180deg, rgba(11, 31, 58, 0.55), rgba(11, 31, 58, 0.92)),
-    url("/fundo-rodacoop.jpg") center 25%/cover no-repeat;
-  border-radius: 14px;
-  padding: 26px 30px;
-  margin-bottom: 22px;
-  box-shadow: 0 10px 30px rgba(11, 31, 58, 0.25);
-}
-
-.hero-painel h1 {
-  color: #fff;
-  margin: 0 0 4px;
-  font-size: 24px;
-  letter-spacing: 0.3px;
-}
-
-.hero-painel .descricao-pagina {
-  color: #d8deed;
-  margin-bottom: 0;
-}
-
 .abas {
   display: flex;
   gap: 4px;
