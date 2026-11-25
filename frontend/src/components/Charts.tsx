@@ -54,77 +54,50 @@ export function BarraEmpilhadaHorizontal({
   dados,
   seriesOrdem,
   corSerie = corStatus,
-  altura = 26,
+  altura = 30,
 }: BarraEmpilhadaProps) {
-  const maiorBarra = Math.max(1, ...dados.map((d) => Object.values(d.series).reduce((a, b) => a + b, 0)));
-  const eixoMax = tetoEixo(maiorBarra);
-  const largura = 100;
-  const marcas = [0, 0.25, 0.5, 0.75, 1];
-
-  const seriesPresentes = seriesOrdem.filter((s) => dados.some((d) => d.series[s]));
+  const totais = dados.map((d) => Object.values(d.series).reduce((a, b) => a + b, 0));
+  const maior = Math.max(1, ...totais);
+  const totalGeral = totais.reduce((a, b) => a + b, 0);
+  const porSerie = (s: string) => dados.reduce((n, d) => n + (d.series[s] ?? 0), 0);
+  const seriesPresentes = seriesOrdem.filter((s) => porSerie(s) > 0);
 
   return (
     <div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {dados.map((d) => {
-          const total = Object.values(d.series).reduce((a, b) => a + b, 0);
-          return (
-            <div key={d.grupo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 64, fontSize: 12, fontWeight: 700, color: "var(--ink)", flexShrink: 0 }}>
-                {d.grupo}
-              </div>
-              <svg
-                viewBox={`0 0 ${largura} ${altura}`}
-                width="100%"
-                height={altura}
-                preserveAspectRatio="none"
+        {dados.map((d, i) => (
+          <div key={d.grupo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 52, fontSize: 12, fontWeight: 700, color: "var(--ink)", flexShrink: 0 }}>{d.grupo}</div>
+            <div style={{ flex: 1, background: "var(--surface-2)", borderRadius: 8, height: altura, overflow: "hidden" }}>
+              <div
                 role="img"
-                aria-label={`${d.grupo}: ${total} veículos`}
+                aria-label={`${d.grupo}: ${totais[i]} veículos. ${seriesOrdem.filter((s) => d.series[s]).map((s) => `${s} ${d.series[s]}`).join(", ")}`}
+                style={{ display: "flex", height: "100%", width: `${(totais[i] / maior) * 100}%`, minWidth: totais[i] ? 6 : 0 }}
               >
-                <defs>
-                  <clipPath id={`clip-${d.grupo}`}>
-                    <rect x={0} y={0} width={largura} height={altura} rx={4} />
-                  </clipPath>
-                </defs>
-                <rect x={0} y={0} width={largura} height={altura} rx={4} fill="var(--surface-2)" />
-                {marcas.slice(1).map((m) => (
-                  <line key={m} x1={m * largura} y1={0} x2={m * largura} y2={altura} stroke="var(--grid)" strokeWidth={0.5} />
-                ))}
-                <g clipPath={`url(#clip-${d.grupo})`}>
-                {(() => {
-                  let x = 0;
-                  return seriesOrdem
-                    .filter((s) => d.series[s])
-                    .map((s) => {
-                      const w = (d.series[s] / eixoMax) * largura;
-                      const rect = (
-                        <rect key={s} x={x} y={0} width={w} height={altura} fill={corSerie(s)}>
-                          <title>
-                            {s}: {d.series[s]}
-                          </title>
-                        </rect>
-                      );
-                      x += w;
-                      return rect;
-                    });
-                })()}
-                </g>
-              </svg>
-              <div style={{ width: 28, textAlign: "right", fontSize: 12, fontWeight: 700, color: "var(--muted)", flexShrink: 0 }}>
-                {total}
+                {seriesOrdem.filter((s) => d.series[s]).map((s) => {
+                  const mostra = d.series[s] / maior >= 0.05;
+                  return (
+                    <div
+                      key={s}
+                      title={`${s}: ${d.series[s]}`}
+                      style={{ flex: d.series[s], background: corSerie(s), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#0b0d14", minWidth: 0 }}
+                    >
+                      {mostra ? d.series[s] : ""}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", marginLeft: 74, marginTop: 2 }}>
-        {marcas.map((m) => (
-          <div key={m} style={{ flex: m === 0 ? "0 0 0" : 1, fontSize: 10, color: "var(--muted)", textAlign: m === 0 ? "left" : "right" }}>
-            {Math.round(m * eixoMax)}
+            <div style={{ width: 28, textAlign: "right", fontSize: 12, fontWeight: 700, color: "var(--muted)", flexShrink: 0 }}>{totais[i]}</div>
           </div>
         ))}
       </div>
-      <Legenda itens={seriesPresentes.map((s) => ({ rotulo: s, cor: corSerie(s) }))} />
+      <Legenda
+        itens={seriesPresentes.map((s) => ({
+          rotulo: `${s} ${porSerie(s)} (${totalGeral ? Math.round((porSerie(s) / totalGeral) * 100) : 0}%)`,
+          cor: corSerie(s),
+        }))}
+      />
     </div>
   );
 }
