@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
@@ -46,46 +46,39 @@ const NOMES_PAPEL: Record<string, string> = {
 const iniciais = (nome?: string | null) =>
   (nome ?? "?").split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("") || "?";
 
-// Navbar fixa no topo: vidro escuro, ícones, indicador de página ativa, grupo
-// "Gestão" em menu suspenso, selo de inspeções vencidas, tema em um toque,
-// menu do usuário e gaveta no celular.
+const CHAVE_LATERAL = "rodacoop_menu_recolhido";
+
+// Menu lateral esquerdo com "flip": expandido (ícone + nome) ou recolhido
+// (só ícones, com dica ao passar o mouse). A escolha fica salva. No celular
+// vira uma gaveta que desliza da esquerda.
 export default function Layout() {
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { tema, definirTema } = useTema();
   const noPainel = location.pathname === "/";
-  const [rolou, setRolou] = useState(false);
-  const [gestaoAberto, setGestaoAberto] = useState(false);
-  const [usuarioAberto, setUsuarioAberto] = useState(false);
+  const [recolhido, setRecolhido] = useState(() => {
+    try { return localStorage.getItem(CHAVE_LATERAL) === "1"; } catch { return false; }
+  });
   const [gavetaAberta, setGavetaAberta] = useState(false);
   const [vencidas, setVencidas] = useState<number | null>(null);
-  const gestaoRef = useRef<HTMLDivElement>(null);
-  const usuarioRef = useRef<HTMLDivElement>(null);
 
   const visiveis = (lista: Item[]) => lista.filter((i) => !i.papeis || (usuario && i.papeis.includes(usuario.role)));
   const principais = useMemo(() => visiveis(PRINCIPAIS), [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
   const gestao = useMemo(() => visiveis(GESTAO), [usuario]); // eslint-disable-line react-hooks/exhaustive-deps
-  const gestaoAtivo = gestao.some((i) => location.pathname.startsWith(i.to));
 
-  useEffect(() => {
-    const f = () => setRolou(window.scrollY > 6);
-    f();
-    window.addEventListener("scroll", f, { passive: true });
-    return () => window.removeEventListener("scroll", f);
-  }, []);
+  function alternar() {
+    setRecolhido((v) => {
+      try { localStorage.setItem(CHAVE_LATERAL, v ? "0" : "1"); } catch { /* sem storage */ }
+      return !v;
+    });
+  }
 
-  // Fecha menus ao trocar de página, ao clicar fora e com Esc.
-  useEffect(() => { setGestaoAberto(false); setUsuarioAberto(false); setGavetaAberta(false); }, [location.pathname]);
+  useEffect(() => { setGavetaAberta(false); }, [location.pathname]);
   useEffect(() => {
-    const fora = (e: MouseEvent) => {
-      if (gestaoRef.current && !gestaoRef.current.contains(e.target as Node)) setGestaoAberto(false);
-      if (usuarioRef.current && !usuarioRef.current.contains(e.target as Node)) setUsuarioAberto(false);
-    };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { setGestaoAberto(false); setUsuarioAberto(false); setGavetaAberta(false); } };
-    document.addEventListener("mousedown", fora);
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setGavetaAberta(false); };
     document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", fora); document.removeEventListener("keydown", esc); };
+    return () => document.removeEventListener("keydown", esc);
   }, []);
 
   // Selo: inspeções vencidas (atualiza ao trocar de página e a cada 5 min).
@@ -104,86 +97,77 @@ export default function Layout() {
 
   function sair() { logout(); navigate("/login"); }
   const claro = tema === "light";
+  const nomePapel = usuario ? NOMES_PAPEL[usuario.role] ?? usuario.role : "";
 
-  const link = (item: Item, extra?: string) => (
-    <NavLink key={item.to} to={item.to} end={item.to === "/"} className={({ isActive }) => `nav-link${isActive ? " ativo" : ""}${extra ? " " + extra : ""}`}>
+  const link = (item: Item) => (
+    <NavLink key={item.to} to={item.to} end={item.to === "/"} data-rotulo={item.label}
+      className={({ isActive }) => `lat-link${isActive ? " ativo" : ""}`}>
       {ICONES[item.icone]}
-      <span>{item.label}</span>
-      {item.to === "/inspecoes" && vencidas != null && vencidas > 0 && <b className="nav-selo" title={`${vencidas} veículo(s) com inspeção vencida`}>{vencidas}</b>}
+      <span className="lat-txt">{item.label}</span>
+      {item.to === "/inspecoes" && vencidas != null && vencidas > 0 && (
+        <b className="nav-selo" title={`${vencidas} veículo(s) com inspeção vencida`}>{vencidas}</b>
+      )}
     </NavLink>
   );
 
   return (
-    <div className="app-shell-navbar">
-      <header className={`topbar${rolou ? " rolou" : ""}`}>
+    <div className={`app-lateral${recolhido ? " recolhido" : ""}${gavetaAberta ? " gaveta-aberta" : ""}`}>
+      <div className="lat-fundo" onClick={() => setGavetaAberta(false)} aria-hidden="true" />
+      <aside className="lateral" aria-label="Menu principal">
         <div className="faixa-risco faixa-fina" aria-hidden="true" />
-        <div className="topbar-linha">
-          <button type="button" className="topbar-hamb" aria-label="Abrir menu" aria-expanded={gavetaAberta} onClick={() => setGavetaAberta((v) => !v)}>
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              {gavetaAberta ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-            </svg>
-          </button>
-          <NavLink to="/" className="topbar-marca" aria-label="Ir ao Painel">
-            <img src="/icon-192.png" alt="" width={38} height={38} />
-            <span className="topbar-marca-txt">
-              <strong>GESTÃO DE FROTA</strong>
-              <small>RodaCoop — O melhor sempre vai chegar.</small>
-            </span>
+        <div className="lat-topo">
+          <NavLink to="/" className="lat-marca" aria-label="Ir ao Painel">
+            <img src="/icon-192.png" alt="" width={40} height={40} />
+            <span className="lat-txt lat-marca-txt"><strong>GESTÃO DE FROTA</strong><small>RodaCoop</small></span>
           </NavLink>
-
-          <nav className="topbar-nav" aria-label="Principal">
-            {principais.map((i) => link(i))}
-            {gestao.length > 0 && (
-              <div className="nav-grupo" ref={gestaoRef}>
-                <button type="button" className={`nav-link${gestaoAtivo ? " ativo" : ""}`} aria-haspopup="menu" aria-expanded={gestaoAberto} onClick={() => setGestaoAberto((v) => !v)}>
-                  {ICONES.bsc}<span>Gestão</span>
-                  <svg className={`nav-seta${gestaoAberto ? " aberta" : ""}`} viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-                </button>
-                {gestaoAberto && <div className="menu-suspenso" role="menu">{gestao.map((i) => link(i, "menu-item"))}</div>}
-              </div>
-            )}
-          </nav>
-
-          <div className="topbar-direita">
-            <button type="button" className="icone-btn" aria-label={claro ? "Ativar modo escuro" : "Ativar modo claro"} title={claro ? "Modo escuro" : "Modo claro"} onClick={() => definirTema(claro ? "dark" : "light")}>
-              {claro ? (
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
-              ) : (
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
-              )}
-            </button>
-            <div className="usuario-menu" ref={usuarioRef}>
-              <button type="button" className="usuario-btn" aria-haspopup="menu" aria-expanded={usuarioAberto} onClick={() => setUsuarioAberto((v) => !v)}>
-                <span className="avatar" aria-hidden="true">{iniciais(usuario?.full_name ?? usuario?.email)}</span>
-                <span className="usuario-txt"><strong>{usuario?.full_name ?? usuario?.email}</strong><small>{usuario ? NOMES_PAPEL[usuario.role] ?? usuario.role : ""}</small></span>
-              </button>
-              {usuarioAberto && (
-                <div className="menu-suspenso menu-usuario" role="menu">
-                  <div className="menu-usuario-topo"><strong>{usuario?.full_name ?? "Usuário"}</strong><small>{usuario?.email}</small><span className="chip-papel">{usuario ? NOMES_PAPEL[usuario.role] ?? usuario.role : ""}</span></div>
-                  <button type="button" className="menu-item" role="menuitem" onClick={sair}>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
-                    <span>Sair</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <button type="button" className="lat-flip" onClick={alternar} aria-label={recolhido ? "Expandir menu" : "Recolher menu"} title={recolhido ? "Expandir menu" : "Recolher menu"}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+          </button>
         </div>
 
-        {gavetaAberta && (
-          <div className="gaveta" role="dialog" aria-label="Menu">
-            {[...principais, ...gestao].map((i) => link(i, "gaveta-item"))}
-            <button type="button" className="nav-link gaveta-item" onClick={sair}>
+        <nav className="lat-nav">
+          <div className="lat-secao"><span className="lat-txt">Operação</span></div>
+          {principais.map(link)}
+          {gestao.length > 0 && (<>
+            <div className="lat-secao"><span className="lat-txt">Gestão</span></div>
+            {gestao.map(link)}
+          </>)}
+        </nav>
+
+        <div className="lat-rodape">
+          <button type="button" className="lat-link lat-btn" data-rotulo={claro ? "Modo escuro" : "Modo claro"} onClick={() => definirTema(claro ? "dark" : "light")}>
+            {claro ? (
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+            )}
+            <span className="lat-txt">{claro ? "Modo escuro" : "Modo claro"}</span>
+          </button>
+          <div className="lat-usuario">
+            <span className="avatar" aria-hidden="true">{iniciais(usuario?.full_name ?? usuario?.email)}</span>
+            <span className="lat-txt lat-usuario-txt"><strong>{usuario?.full_name ?? usuario?.email}</strong><small>{nomePapel}</small></span>
+            <button type="button" className="lat-sair" onClick={sair} aria-label="Sair" title="Sair">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
-              <span>Sair</span>
             </button>
           </div>
-        )}
-      </header>
-      <div className={`area-conteudo area-conteudo-fundo${noPainel ? " area-painel" : ""}`}>
-        <main className="conteudo">
-          <Outlet />
-        </main>
+        </div>
+      </aside>
+
+      <div className="lat-principal">
+        <header className="lat-mobile">
+          <button type="button" className="topbar-hamb" aria-label="Abrir menu" aria-expanded={gavetaAberta} onClick={() => setGavetaAberta(true)}>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <NavLink to="/" className="topbar-marca" aria-label="Ir ao Painel">
+            <img src="/icon-192.png" alt="" width={34} height={34} />
+            <span className="topbar-marca-txt"><strong>GESTÃO DE FROTA</strong></span>
+          </NavLink>
+        </header>
+        <div className={`area-conteudo area-conteudo-fundo${noPainel ? " area-painel" : ""}`}>
+          <main className="conteudo">
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   );
