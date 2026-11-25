@@ -804,3 +804,7 @@ code.copiavel {
 .kpi-barra { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 10px; }
 .kpi-barra span { display: block; height: 100%; border-radius: 999px; transition: width 0.6s ease; }
 .kpi-selo { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--warn-bg, rgba(245,158,11,0.15)); color: var(--warn-text, #b45309); }
+
+/* Modo escuro do mapa: inverte os tiles claros do OpenStreetMap (gratuito, sem chave). */
+.mapa-escuro .tile-osm { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.55); }
+.mapa-escuro.leaflet-container { background: #0b1117; }

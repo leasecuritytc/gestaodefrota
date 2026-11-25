@@ -13,10 +13,9 @@ const COORDS_BASES: Record<string, { lat: number; lng: number; cidade: string }>
   SMG9: { lat: -21.5514, lng: -45.43, cidade: "Varginha/MG" },
 };
 
-const TILES = {
-  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-};
+// Tiles gratuitos e sem chave do OpenStreetMap. O modo escuro é obtido por
+// filtro CSS (classe mapa-escuro), pois os tiles escuros do CARTO exigem chave.
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 export interface ResumoBaseMapa {
   base: string;
@@ -60,10 +59,10 @@ export default function OperationalMap({ porBase, onFiltrarBase }: Props) {
   useEffect(() => {
     if (!divRef.current || mapaRef.current) return;
     const mapa = L.map(divRef.current, { zoomControl: true, attributionControl: true }).setView([-21.9, -45.9], 8);
-    tileRef.current = L.tileLayer(TILES[tema], {
-      subdomains: "abcd",
+    tileRef.current = L.tileLayer(TILE_URL, {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      className: "tile-osm",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(mapa);
     mapaRef.current = mapa;
 
@@ -79,9 +78,12 @@ export default function OperationalMap({ porBase, onFiltrarBase }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Troca de tema: só troca a URL dos tiles (mantém zoom, posição e marcadores).
+  // Troca de tema: só alterna a classe do contêiner (filtro CSS nos tiles);
+  // mantém zoom, posição e marcadores.
   useEffect(() => {
-    tileRef.current?.setUrl(TILES[tema]);
+    divRef.current?.classList.toggle("mapa-escuro", tema === "dark");
+    const t = setTimeout(() => mapaRef.current?.invalidateSize(), 150);
+    return () => clearTimeout(t);
   }, [tema]);
 
   // Marcadores, malha tracejada e popups.
