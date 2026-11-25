@@ -141,6 +141,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
       {msg && <div className={msg.tipo === "erro" ? "erro" : "sucesso"} role="status" aria-live="polite">{msg.texto}</div>}
       <div className="painel">
         <h2>Odômetro</h2>
+        <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Confira o número no painel do veículo e digite exatamente como aparece. A foto precisa mostrar a quilometragem legível. O km não pode ser menor que o já lançado, e depois de concluída a inspeção não dá para corrigir.</span></div>
         <label className="insp-km">Quilometragem (km) *
           <input type="number" inputMode="numeric" min={det.km_minimo ?? 0} value={km} disabled={leitura} onChange={(e) => setKm(e.target.value)} aria-invalid={kmBaixo} />
         </label>
@@ -394,6 +395,7 @@ export default function InspecoesPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Inspecionar {alvo.placa}</h2>
             <p className="subtitulo">{alvo.base} · {alvo.tipo ?? "Tipo não informado"}{alvo.rentadora ? ` · ${alvo.rentadora}` : ""}</p>
+            <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Digite exatamente o km do painel. Depois você precisará fotografar o odômetro.</span></div>
             <div className="campo"><label>Quilometragem atual (km)</label><input type="number" inputMode="numeric" min={alvo.ultimo_km ? Number(alvo.ultimo_km) : 0} autoFocus value={kmNovo} onChange={(e) => setKmNovo(e.target.value)} />
               {alvo.ultimo_km && <small className="insp-sub">Último km lançado: {Number(alvo.ultimo_km).toLocaleString("pt-BR")} km (não pode ser menor).</small>}
               {kmNovo !== "" && alvo.ultimo_km && Number(kmNovo) < Number(alvo.ultimo_km) && <div className="erro" role="alert">Menor que o km já lançado.</div>}</div>

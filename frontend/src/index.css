@@ -828,3 +828,6 @@ code.copiavel {
 .insp-sub { color: var(--muted); font-size: 12px; }
 .insp-acoes { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 .insp-acoes .btn { padding: 6px 12px; font-size: 13px; }
+
+.insp-aviso { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid #f59e0b; background: rgba(245,158,11,0.12); font-size: 13px; color: var(--text); }
+.insp-aviso strong { color: #f59e0b; }
