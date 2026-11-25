@@ -734,3 +734,26 @@ code.copiavel {
 .popup-base { font-size: 13px; line-height: 1.5; min-width: 180px; }
 .popup-base strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 14px; }
 .popup-base button { margin-top: 8px; background: #ff6b00; color: #fff; border: 0; border-radius: 6px; padding: 6px 12px; font-weight: 600; }
+
+/* Inspeções (checklist próprio) */
+.insp-km { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; max-width: 240px; }
+.insp-km input, .insp-falha input, .insp-obs { padding: 10px 12px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); border-radius: 8px; font: inherit; width: 100%; }
+.insp-item { padding: 12px 0; border-bottom: 1px solid var(--row-border); }
+.insp-item:last-child { border-bottom: none; }
+.insp-item-falha { background: var(--err-bg); margin: 0 -12px; padding: 12px; border-radius: 8px; }
+.insp-item-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.insp-critico { color: var(--danger); font-size: 11px; font-weight: 700; }
+.insp-seg { display: inline-flex; gap: 6px; }
+.insp-seg button { min-height: 44px; min-width: 64px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); border-radius: 8px; font-weight: 700; font-size: 13px; }
+.insp-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.insp-seg button.ativo.insp-seg-OK { background: var(--success); border-color: var(--success); color: #fff; }
+.insp-seg button.ativo.insp-seg-FALHA { background: var(--danger); border-color: var(--danger); color: #fff; }
+.insp-seg button.ativo.insp-seg-NA { background: #64748b; border-color: #64748b; color: #fff; }
+.insp-falha { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.insp-fotos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.insp-foto { position: relative; display: inline-block; }
+.insp-foto img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.insp-foto-ph { width: 72px; height: 72px; display: inline-flex; align-items: center; justify-content: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); }
+.insp-foto button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: none; background: var(--danger); color: #fff; font-size: 14px; line-height: 1; }
+.insp-rodape { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding: 12px 16px; background: var(--modal-bg); border-top: 1px solid var(--border); margin: 0 -8px; z-index: 5; }
+.insp-rodape span { margin-right: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
