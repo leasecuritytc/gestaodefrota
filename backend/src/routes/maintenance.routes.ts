@@ -24,7 +24,7 @@ maintenanceRouter.get("/", async (req, res) => {
   const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT id, placa, base, tipo, descricao, oficina, data_entrada, data_saida,
-              custo, status, source, ingested_at
+              previsao_saida, custo, status, source, ingested_at
        FROM maintenance_records
        ${where}
        ORDER BY data_entrada DESC`,
@@ -42,6 +42,7 @@ const createSchema = z.object({
   oficina: z.string().optional(),
   data_entrada: z.string(), // ISO date
   data_saida: z.string().optional(),
+  previsao_saida: z.string().optional(),
   custo: z.number().min(0).default(0),
 });
 
@@ -51,6 +52,9 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
     return res.status(400).json({ error: parsed.error.flatten() });
   }
   const m = parsed.data;
+  if (m.previsao_saida && m.previsao_saida < m.data_entrada) {
+    return res.status(400).json({ error: "A previsão de saída não pode ser anterior à data de entrada." });
+  }
   if (m.data_saida && m.data_saida < m.data_entrada) {
     return res
       .status(400)
@@ -59,8 +63,8 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
   const result = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `INSERT INTO maintenance_records
-         (placa, base, tipo, descricao, oficina, data_entrada, data_saida, custo, status, source, source_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,
+         (placa, base, tipo, descricao, oficina, data_entrada, data_saida, custo, previsao_saida, status, source, source_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
                CASE WHEN $7 IS NOT NULL THEN 'Concluída' ELSE 'Em andamento' END,
                'manual', gen_random_uuid()::text)
        RETURNING *`,
@@ -73,6 +77,7 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
         m.data_entrada,
         m.data_saida ?? null,
         m.custo,
+        m.previsao_saida ?? null,
       ]
     )
   );
@@ -87,6 +92,7 @@ const updateSchema = z.object({
   descricao: z.string().nullable().optional(),
   oficina: z.string().nullable().optional(),
   data_saida: z.string().nullable().optional(),
+  previsao_saida: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   custo: z.number().min(0).optional(),
   status: z.enum(["Em andamento", "Concluída", "Cancelada"]).optional(),
 });
@@ -108,6 +114,9 @@ maintenanceRouter.patch("/:id", requireRole("superadmin", "admin"), async (req, 
         throw Object.assign(new Error("Manutenção não encontrada."), { httpStatus: 404 });
       }
 
+      if (campos.previsao_saida && campos.previsao_saida < String(atual.rows[0].data_entrada instanceof Date ? atual.rows[0].data_entrada.toISOString().slice(0, 10) : atual.rows[0].data_entrada).slice(0, 10)) {
+        throw Object.assign(new Error("A previsão de saída não pode ser anterior à data de entrada."), { httpStatus: 400 });
+      }
       const sets: string[] = [];
       const valores: unknown[] = [];
       let i = 1;

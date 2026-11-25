@@ -11,10 +11,15 @@ interface Manutencao {
   oficina: string | null;
   data_entrada: string;
   data_saida: string | null;
+  previsao_saida: string | null;
   custo: string;
   status: string;
   source: string;
 }
+
+// Datas vêm como ISO (UTC); exibir o dia sem deslocar por fuso.
+const fmtDia = (v: string) => v.slice(0, 10).split("-").reverse().join("/");
+const hojeIso = new Date().toISOString().slice(0, 10);
 
 const PODE_CRIAR = ["superadmin", "admin", "gestor_base"];
 
@@ -40,6 +45,7 @@ export default function ManutencoesPage() {
   const [oficina, setOficina] = useState("");
   const [dataEntrada, setDataEntrada] = useState("");
   const [dataSaida, setDataSaida] = useState("");
+  const [previsao, setPrevisao] = useState("");
   const [custo, setCusto] = useState("0");
   const [erroForm, setErroForm] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -66,6 +72,7 @@ export default function ManutencoesPage() {
         oficina: oficina || undefined,
         data_entrada: dataEntrada,
         data_saida: dataSaida || undefined,
+        previsao_saida: previsao || undefined,
         custo: Number(custo) || 0,
       });
       setMostrarForm(false);
@@ -75,6 +82,7 @@ export default function ManutencoesPage() {
       setOficina("");
       setDataEntrada("");
       setDataSaida("");
+      setPrevisao("");
       setCusto("0");
       carregar();
     } catch (err) {
@@ -91,6 +99,7 @@ export default function ManutencoesPage() {
       descricao: m.descricao,
       oficina: m.oficina,
       data_saida: m.data_saida ? m.data_saida.slice(0, 10) : null,
+      previsao_saida: m.previsao_saida ? m.previsao_saida.slice(0, 10) : null,
       custo: m.custo,
       status: m.status,
     });
@@ -106,6 +115,7 @@ export default function ManutencoesPage() {
         ...formEdit,
         custo: formEdit.custo !== undefined ? Number(formEdit.custo) : undefined,
         data_saida: formEdit.data_saida || null,
+        previsao_saida: formEdit.previsao_saida || null,
       });
       setEditando(null);
       carregar();
@@ -179,6 +189,10 @@ export default function ManutencoesPage() {
             <input type="date" value={dataSaida} onChange={(e) => setDataSaida(e.target.value)} />
           </div>
           <div className="campo">
+            <label>Previsão de saída</label>
+            <input type="date" value={previsao} onChange={(e) => setPrevisao(e.target.value)} />
+          </div>
+          <div className="campo">
             <label>Custo (R$)</label>
             <input
               type="number"
@@ -204,6 +218,7 @@ export default function ManutencoesPage() {
                 <th>Tipo</th>
                 <th>Oficina</th>
                 <th>Entrada</th>
+                <th>Previsão de saída</th>
                 <th>Saída</th>
                 <th>Custo</th>
                 <th>Status</th>
@@ -219,7 +234,13 @@ export default function ManutencoesPage() {
                   <td>{m.tipo}</td>
                   <td>{m.oficina ?? "—"}</td>
                   <td>{new Date(m.data_entrada).toLocaleDateString("pt-BR")}</td>
-                  <td>{m.data_saida ? new Date(m.data_saida).toLocaleDateString("pt-BR") : "—"}</td>
+                  <td>
+                    {m.previsao_saida ? fmtDia(m.previsao_saida) : "—"}
+                    {m.status === "Em andamento" && m.previsao_saida && m.previsao_saida.slice(0, 10) < hojeIso && (
+                      <span className="tag tag-inativo" style={{ marginLeft: 6 }}>Atrasada</span>
+                    )}
+                  </td>
+                  <td>{m.data_saida ? fmtDia(m.data_saida) : "—"}</td>
                   <td>
                     {Number(m.custo).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                   </td>
@@ -273,7 +294,15 @@ export default function ManutencoesPage() {
               />
             </div>
             <div className="campo">
-              <label>Data de saída</label>
+              <label>Previsão de saída</label>
+              <input
+                type="date"
+                value={formEdit.previsao_saida ?? ""}
+                onChange={(e) => setFormEdit((f) => ({ ...f, previsao_saida: e.target.value }))}
+              />
+            </div>
+            <div className="campo">
+              <label>Data de saída (real)</label>
               <input
                 type="date"
                 value={formEdit.data_saida ?? ""}
