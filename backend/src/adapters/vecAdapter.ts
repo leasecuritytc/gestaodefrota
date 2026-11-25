@@ -32,6 +32,17 @@ function numero(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Odômetro do VEÍCULO: a VEC manda decimal com ponto ("7626.317" = 7.626 km). Tratar o ponto como
+// milhar (como em numero()) multiplicava o km por 1000. Com vírgula, segue o padrão BR.
+function numeroKm(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return v;
+  const s = String(v).trim().replace(/[^\d,.-]/g, "");
+  if (!s) return null;
+  const n = Number(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
+  return Number.isFinite(n) ? n : null;
+}
+
 function dataHora(v: unknown): string | null {
   const s = texto(v);
   if (!s) return null;
@@ -129,7 +140,7 @@ export async function syncVec(origem: "automatico" | "manual" = "manual"): Promi
             texto(campo(l, ["unidad", "base_nombre", "svc", "base", "base.nombre"])),
             texto(campo(l, ["transportadora_nombre", "transportadora", "transportadora.nombre"])),
             texto(campo(l, ["rentadora_nombre", "rentadora", "rentadora.nombre", "locadora"])),
-            numero(campo(l, ["km_actual", "medidor", "kilometraje", "km"])),
+            numeroKm(campo(l, ["km_actual", "kmActual", "medidor", "kilometraje", "km"])),
             dataHora(campo(l, ["ultima_fecha_hora_bipeo", "ultimoBipeo", "ultimoBip", "ultimo_bipeo"])),
             JSON.stringify(l),
           ]
