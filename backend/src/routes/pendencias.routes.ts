@@ -18,6 +18,7 @@ type Sev = "alta" | "media" | "baixa";
 interface Pendencia {
   chave: string; tipo: string; severidade: Sev; origem: Origem; origem_data: string | null;
   placa: string | null; base: string | null; titulo: string; detalhe: string; como_corrigir: string;
+  vehicle_id?: string | null;
 }
 
 const DIA = 86_400_000;
@@ -25,11 +26,12 @@ const DIA = 86_400_000;
 async function calcular(c: import("pg").PoolClient): Promise<Pendencia[]> {
   const bases = env.vec.bases;
   const out: Pendencia[] = [];
+  let vidAtual: string | null = null;
   const add = (p: Omit<Pendencia, "chave">) =>
-    out.push({ ...p, chave: `${p.tipo}:${p.placa ?? "-"}:${p.origem_data ? new Date(p.origem_data).toISOString().slice(0, 10) : "sem-data"}` });
+    out.push({ ...p, vehicle_id: p.placa ? vidAtual : null, chave: `${p.tipo}:${p.placa ?? "-"}:${p.origem_data ? new Date(p.origem_data).toISOString().slice(0, 10) : "sem-data"}` });
 
   const veic = (await c.query(
-    `SELECT v.id, v.placa, v.base, v.tipo, v.chassi, v.status, v.source, coalesce(v.ingested_at, v.created_at) AS planilha_em,
+    `SELECT v.id, (SELECT count(*)::int FROM veiculo_fotos_chassi f WHERE f.vehicle_id = v.id) AS fotos_chassi, v.placa, v.base, v.tipo, v.chassi, v.status, v.source, coalesce(v.ingested_at, v.created_at) AS planilha_em,
             vv.estado AS vec_estado, vv.km AS vec_km, vv.ultimo_bip, vv.sincronizado_em AS vec_em,
             u.ultimo_km, u.ultimo_em, kr.km AS km_ref
        FROM vehicles v
@@ -46,6 +48,7 @@ async function calcular(c: import("pg").PoolClient): Promise<Pendencia[]> {
   const agora = Date.now();
 
   for (const v of veic) {
+    vidAtual = v.id;
     const origemCad: Origem = v.source === "vec" ? "VEC" : v.source === "bsc" ? "BSC" : v.source === "manual" ? "Plataforma" : "Planilha";
     if (!v.tipo || !String(v.tipo).trim()) {
       add({ tipo: "sem_tipo", severidade: "media", origem: origemCad, origem_data: v.planilha_em, placa: v.placa, base: v.base,
@@ -55,7 +58,12 @@ async function calcular(c: import("pg").PoolClient): Promise<Pendencia[]> {
     if (!v.chassi || !String(v.chassi).trim()) {
       add({ tipo: "sem_chassi", severidade: "baixa", origem: origemCad, origem_data: v.planilha_em, placa: v.placa, base: v.base,
         titulo: "Chassi não informado", detalhe: `O cadastro veio de ${origemCad.toLowerCase()} sem o chassi.`,
-        como_corrigir: "Abra Veículos, edite o veículo e preencha o chassi." });
+        como_corrigir: "Preencha o chassi em Veículos. Se não tiver o número, anexe a foto do chassi aqui ou dispense o alerta informando o motivo." });
+    }
+    if (!v.fotos_chassi) {
+      add({ tipo: "sem_foto_chassi", severidade: "baixa", origem: "Plataforma", origem_data: null, placa: v.placa, base: v.base,
+        titulo: "Foto do chassi não anexada", detalhe: "Nenhuma foto do chassi foi anexada a este veículo.",
+        como_corrigir: "Peça a foto ao motorista (use “Copiar pedido ao motorista”) e anexe aqui. Se não for possível agora, dispense o alerta informando o motivo." });
     }
     if (!v.vec_em) {
       add({ tipo: "fora_da_vec", severidade: "media", origem: "VEC", origem_data: sync, placa: v.placa, base: v.base,
@@ -106,7 +114,7 @@ pendenciasRouter.get("/", h(async (req, res) => {
   const r = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
     const lista = await calcular(c);
     const conf = new Map((await c.query(
-      `SELECT p.chave, p.observacao, p.conferido_em, coalesce(u.full_name, u.email) AS por FROM pendencias_conferidas p LEFT JOIN users u ON u.id = p.conferido_por`
+      `SELECT p.chave, p.motivo, p.observacao, p.conferido_em, coalesce(u.full_name, u.email) AS por FROM pendencias_conferidas p LEFT JOIN users u ON u.id = p.conferido_por`
     )).rows.map((x) => [x.chave as string, x]));
     return lista.map((p) => ({ ...p, conferida: conf.get(p.chave) ?? null }));
   });
@@ -127,18 +135,30 @@ pendenciasRouter.get("/resumo", h(async (req, res) => {
   res.json({ total: r.length, altas: r.filter((p) => p.severidade === "alta").length, por_placa: porPlaca });
 }));
 
-const confSchema = z.object({ chave: z.string().min(3).max(200), observacao: z.string().trim().min(5, "Descreva o que foi conferido (mín. 5 caracteres).").max(500) });
+export const MOTIVOS = ["nao_se_aplica", "aguardando_motorista", "nao_consta_vec", "sem_acesso", "ja_corrigido", "outro"] as const;
+const confSchema = z.object({ chave: z.string().min(3).max(200), motivo: z.enum(MOTIVOS, { message: "Escolha o motivo na lista." }), observacao: z.string().trim().min(5, "Descreva o que foi conferido (mín. 5 caracteres).").max(500) });
 
 pendenciasRouter.post("/conferir", h(async (req, res) => {
   const p = confSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message ?? "Dados inválidos." });
   await withRole(req.auth!.role, req.auth!.sub, async (c) => {
     await c.query(
-      `INSERT INTO pendencias_conferidas (chave, observacao, conferido_por) VALUES ($1,$2,$3)
-       ON CONFLICT (chave) DO UPDATE SET observacao = EXCLUDED.observacao, conferido_por = EXCLUDED.conferido_por, conferido_em = now()`,
-      [p.data.chave, p.data.observacao, req.auth!.sub]
+      `INSERT INTO pendencias_conferidas (chave, motivo, observacao, conferido_por) VALUES ($1,$4,$2,$3)
+       ON CONFLICT (chave) DO UPDATE SET motivo = EXCLUDED.motivo, observacao = EXCLUDED.observacao, conferido_por = EXCLUDED.conferido_por, conferido_em = now()`,
+      [p.data.chave, p.data.observacao, req.auth!.sub, p.data.motivo]
     );
-    await registrarAuditoria(c, req.auth!.sub, "pendencia_conferida", "pendencias", p.data.chave, { observacao: p.data.observacao });
+    await registrarAuditoria(c, req.auth!.sub, "pendencia_conferida", "pendencias", p.data.chave, { motivo: p.data.motivo, observacao: p.data.observacao });
+  });
+  res.json({ ok: true });
+}));
+
+// Reativa um alerta que tinha sido dispensado.
+pendenciasRouter.post("/reativar", h(async (req, res) => {
+  const p = z.object({ chave: z.string().min(3).max(200) }).safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: "Dados inválidos." });
+  await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    await c.query(`DELETE FROM pendencias_conferidas WHERE chave = $1`, [p.data.chave]);
+    await registrarAuditoria(c, req.auth!.sub, "pendencia_reativada", "pendencias", p.data.chave, null);
   });
   res.json({ ok: true });
 }));

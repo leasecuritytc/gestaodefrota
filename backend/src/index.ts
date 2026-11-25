@@ -16,6 +16,7 @@ import { bscRouter } from "./routes/bsc.routes";
 import { checklistsRouter } from "./routes/checklists.routes";
 import { checklistsProprioRouter } from "./routes/checklistsProprios.routes";
 import { pendenciasRouter } from "./routes/pendencias.routes";
+import { chassiFotosRouter } from "./routes/chassiFotos.routes";
 import { perfilRouter } from "./routes/perfil.routes";
 import { relatoriosRouter, relatoriosPublicoRouter } from "./routes/relatorios.routes";
 import { agendarSyncVec } from "./adapters/vecAdapter";
@@ -43,6 +44,7 @@ app.use("/api/checklists", checklistsRouter);
 app.use("/api/checklists-proprios", checklistsProprioRouter);
 app.use("/api/pendencias", pendenciasRouter);
 app.use("/api/perfil", perfilRouter);
+app.use("/api/chassi-fotos", chassiFotosRouter);
 app.use("/api/relatorios", relatoriosRouter);
 app.use("/api/public/relatorios", relatoriosPublicoRouter);
 

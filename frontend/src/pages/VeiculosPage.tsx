@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, mensagemErro } from "../api";
 import { useAuth, PAPEIS_ADMIN } from "../auth";
+import ChassiFotos from "../components/ChassiFotos";
 
 interface Veiculo {
   id: string;
@@ -90,6 +91,7 @@ export default function VeiculosPage() {
   const [erroModal, setErroModal] = useState<string | null>(null);
 
   const [editandoDados, setEditandoDados] = useState<Veiculo | null>(null);
+  const [fotoChassi, setFotoChassi] = useState<Veiculo | null>(null);
   const [formDados, setFormDados] = useState<Partial<Veiculo>>({});
   const [salvandoDados, setSalvandoDados] = useState(false);
   const [erroModalDados, setErroModalDados] = useState<string | null>(null);
@@ -193,6 +195,7 @@ export default function VeiculosPage() {
       status: v.status,
       base: v.base,
       tipo: v.tipo,
+      chassi: v.chassi,
       rentadora: v.rentadora,
       transportadora: v.transportadora,
       subregiao: v.subregiao,
@@ -206,7 +209,7 @@ export default function VeiculosPage() {
     setSalvandoDados(true);
     setErroModalDados(null);
     try {
-      await api.patch(`/vehicles/${editandoDados.id}`, formDados);
+      await api.patch(`/vehicles/${editandoDados.id}`, { ...formDados, chassi: (formDados.chassi ?? "").trim() || null });
       setEditandoDados(null);
       carregar();
     } catch (err) {
@@ -427,6 +430,8 @@ export default function VeiculosPage() {
         </div>
       )}
 
+      {fotoChassi && <ChassiFotos vehicleId={fotoChassi.id} placa={fotoChassi.placa} onFechar={() => setFotoChassi(null)} />}
+
       {editandoDados && (
         <div className="modal-fundo" onClick={() => setEditandoDados(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -451,6 +456,18 @@ export default function VeiculosPage() {
                 value={formDados.base ?? ""}
                 onChange={(e) => setFormDados((f) => ({ ...f, base: e.target.value }))}
               />
+            </div>
+            <div className="campo">
+              <label htmlFor="vd-chassi">Chassi (17 caracteres)</label>
+              <input
+                id="vd-chassi"
+                value={formDados.chassi ?? ""}
+                maxLength={17}
+                autoCapitalize="characters"
+                onChange={(e) => setFormDados((f) => ({ ...f, chassi: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") }))}
+              />
+              {!!formDados.chassi && formDados.chassi.length !== 17 && <small className="insp-sub">O chassi costuma ter 17 caracteres ({formDados.chassi.length} digitados). Confira antes de salvar.</small>}
+              <button type="button" className="btn btn-secundario" style={{ marginTop: 6 }} onClick={() => { setFotoChassi(editandoDados); }}>📷 Foto do chassi</button>
             </div>
             <div className="campo">
               <label>Tipo</label>

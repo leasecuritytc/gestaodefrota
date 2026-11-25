@@ -75,6 +75,23 @@ async function buscarPaginas(caminho: string, maxPaginas: number, extra: Record<
   return todas;
 }
 
+// Depois de cada sincronização: preenche chassi/tipo vazios com o que a VEC trouxe.
+// Nunca sobrescreve valor já preenchido (edição do admin vale mais).
+async function completarCadastroPelaVec(): Promise<void> {
+  await withRole("superadmin", "", async (c) => {
+    await c.query(
+      `UPDATE vehicles v SET chassi = e.chassi
+         FROM (SELECT DISTINCT ON (placa) placa, btrim(chassi) AS chassi FROM checklist_events
+                WHERE chassi IS NOT NULL AND btrim(chassi) <> '' ORDER BY placa, data_hora DESC) e
+        WHERE e.placa = v.placa AND (v.chassi IS NULL OR btrim(v.chassi) = '')`
+    );
+    await c.query(
+      `UPDATE vehicles v SET tipo = btrim(vv.tipo) FROM vec_veiculos vv
+        WHERE vv.placa = v.placa AND vv.tipo IS NOT NULL AND btrim(vv.tipo) <> '' AND (v.tipo IS NULL OR btrim(v.tipo) = '')`
+    );
+  });
+}
+
 export async function syncVec(origem: "automatico" | "manual" = "manual"): Promise<ResultadoSync> {
   if (!isVecConfigurado()) {
     return {
@@ -203,6 +220,7 @@ export async function syncVec(origem: "automatico" | "manual" = "manual"): Promi
       );
     });
 
+    await completarCadastroPelaVec().catch(() => undefined); // melhor esforço: não invalida a sincronização
     return { ok: true, veiculos: gravadosVeic, checklists: gravadosCheck, ignorados };
   } catch (err: any) {
     const msg = String(err?.message ?? err).slice(0, 500);
