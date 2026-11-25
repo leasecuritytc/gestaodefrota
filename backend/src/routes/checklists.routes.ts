@@ -1,3 +1,4 @@
+import { env } from "../env";
 import { Router } from "express";
 import { z } from "zod";
 import { withRole } from "../db";
@@ -12,6 +13,8 @@ const filtroSchema = z.object({
   de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   falhas: z.enum(["1"]).optional(),
+  placa: z.string().max(10).optional(),
+  base: z.string().max(10).optional(),
   limite: z.coerce.number().int().min(1).max(500).default(200),
 });
 
@@ -35,6 +38,8 @@ checklistsRouter.get("/", async (req, res) => {
     cond.push(`data_hora < ($${args.length}::date + 1)`);
   }
   if (f.falhas) cond.push(`num_falhas > 0`);
+  if (f.placa) { args.push(`%${f.placa.toUpperCase().replace(/[^A-Z0-9]/g, "")}%`); cond.push(`upper(placa) LIKE $${args.length}`); }
+  if (f.base) { args.push(f.base); cond.push(`placa IN (SELECT placa FROM vehicles WHERE upper(base) = upper($${args.length}))`); }
   const where = cond.length ? `WHERE ${cond.join(" AND ")}` : "";
   try {
     const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
@@ -57,7 +62,7 @@ checklistsRouter.get("/", async (req, res) => {
       );
       return { totais: totais.rows[0], linhas: linhas.rows };
     });
-    res.json(out);
+    res.json({ ...out, bases: env.vec.bases });
   } catch (err) {
     console.error("[checklists] erro:", err);
     res.status(500).json({ error: "Falha ao ler os checklists." });
@@ -74,6 +79,8 @@ checklistsRouter.get("/pdf", async (req, res) => {
   const args: unknown[] = [f.de, f.ate];
   if (f.q) { args.push(`%${f.q.toUpperCase()}%`); cond.push(`(upper(placa) LIKE $${args.length} OR upper(coalesce(svc,'')) LIKE $${args.length} OR upper(coalesce(motorista,'')) LIKE $${args.length})`); }
   if (f.falhas) cond.push(`num_falhas > 0`);
+  if (f.placa) { args.push(`%${f.placa.toUpperCase().replace(/[^A-Z0-9]/g, "")}%`); cond.push(`upper(placa) LIKE $${args.length}`); }
+  if (f.base) { args.push(f.base); cond.push(`placa IN (SELECT placa FROM vehicles WHERE upper(base) = upper($${args.length}))`); }
   const where = `WHERE ${cond.join(" AND ")}`;
   const LIM = 400;
   const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
@@ -85,7 +92,7 @@ checklistsRouter.get("/pdf", async (req, res) => {
     return { autor: aut.autor, totais, linhas, porVeiculo };
   });
   if ("erro" in out) return res.status(409).json({ error: out.erro, code: "perfil_incompleto" });
-  const filtro = [f.q ? `busca "${f.q}"` : "", f.falhas ? "só com falhas" : ""].filter(Boolean).join(", ");
+  const filtro = [f.q ? `busca "${f.q}"` : "", f.base ? `base ${f.base}` : "", f.placa ? `placa ${f.placa.toUpperCase()}` : "", f.falhas ? "só com falhas" : ""].filter(Boolean).join(", ");
   const doc = pdfChecklistsVec({ autor: out.autor, de: f.de, ate: f.ate, filtro, totais: out.totais, linhas: out.linhas, porVeiculo: out.porVeiculo, truncado: out.totais.total > out.linhas.length });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="checklists_vec_${f.de}_${f.ate}.pdf"`);

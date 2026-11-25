@@ -46,9 +46,9 @@ export function pdfChecklistsVec(a: { autor: Autor; de: string; ate: string; fil
 
 export interface PaginaBsc { pagina: string; coletado_em: string; linhas: string[]; tabelas: string[][][]; numeros: { rotulo: string; valor: string }[] }
 
-export function pdfBsc(a: { autor: Autor; de: string; ate: string; bases: string[]; paginas: PaginaBsc[] }): Doc {
+export function pdfBsc(a: { autor: Autor; de: string; ate: string; bases: string[]; paginas: PaginaBsc[]; filtro?: string }): Doc {
   const titulo = `BSC — ${fmtDataBR(a.de)} a ${fmtDataBR(a.ate)}`;
-  const doc = novoDocumento(titulo, `Scorecard do fornecedor (Mercado Livre) · Bases: ${a.bases.join(", ")} · último retrato coletado em cada página do período`, a.autor);
+  const doc = novoDocumento(titulo, `Scorecard do fornecedor (Mercado Livre) · Bases: ${a.bases.join(", ")} · último retrato coletado em cada página do período${a.filtro ? "   ·   Filtro: " + a.filtro : ""}`, a.autor);
   a.paginas.forEach((p, i) => {
     secao(doc, p.pagina, 120);
     nota(doc, `Coletado em ${hora(p.coletado_em)} — fonte: BSC (Looker Studio).`);

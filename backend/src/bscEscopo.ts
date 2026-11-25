@@ -40,6 +40,22 @@ export function filtrarTabela(tab: string[][], placas: Set<string>): TabelaFiltr
   return { tabela: [tab[0], ...mantidas], lidas: dados.length, mantidas: mantidas.length };
 }
 
+// Refina uma tabela já no escopo: por placa e/ou por base escolhidas na pesquisa.
+// Sem coluna de placa não dá para filtrar por placa: a tabela sai (retorna null).
+export function refinarTabela(tab: string[][], f: { placas?: Set<string>; base?: string }): string[][] | null {
+  if (!f.placas && !f.base) return tab;
+  const cab = (tab[0] ?? []).map(limparCab);
+  const iPlaca = cab.findIndex((c) => COL_PLACA.test(c));
+  const iBase = cab.map((c, i) => (COL_BASE.test(c) ? i : -1)).filter((i) => i >= 0);
+  const base = (f.base ?? "").toUpperCase();
+  let ok: (l: string[]) => boolean;
+  if (iPlaca >= 0 && f.placas) ok = (l) => f.placas!.has(normPlaca(l[iPlaca]));
+  else if (f.placas) return null;
+  else if (iBase.length) ok = (l) => iBase.some((i) => String(l[i] ?? "").toUpperCase().includes(base));
+  else return null;
+  return [tab[0], ...tab.slice(1).filter(ok)];
+}
+
 export interface Retrato {
   linhas: string[];
   tabelas: string[][][];

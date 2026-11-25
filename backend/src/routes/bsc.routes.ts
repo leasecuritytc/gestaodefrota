@@ -5,7 +5,7 @@ import { env } from "../env";
 import { withRole } from "../db";
 import { autorParaPdf, pdfBsc } from "../exportPdf";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { aplicarEscopo, normPlaca, repararDeep } from "../bscEscopo";
+import { aplicarEscopo, normPlaca, refinarTabela, repararDeep } from "../bscEscopo";
 
 export const bscRouter = Router();
 
@@ -89,31 +89,78 @@ bscRouter.get("/", requireAuth, requireRole("superadmin", "admin"), async (req, 
   }
 });
 
-// PDF do BSC por período: o último retrato de cada página coletado entre as datas.
-bscRouter.get("/pdf", requireAuth, requireRole("superadmin", "admin"), async (req, res) => {
-  const re = /^\d{4}-\d{2}-\d{2}$/;
-  const de = String(req.query.de ?? ""), ate = String(req.query.ate ?? "");
-  if (!re.test(de) || !re.test(ate)) return res.status(400).json({ error: "Escolha a data inicial e a final." });
-  if (de > ate) return res.status(400).json({ error: "A data inicial não pode ser depois da final." });
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const pesquisaSchema = z.object({
+  de: z.string().regex(ISO).optional(),
+  ate: z.string().regex(ISO).optional(),
+  pagina: z.string().max(80).optional(),
+  placa: z.string().max(10).optional(),
+  base: z.string().max(10).optional(),
+});
+type Pesquisa = z.infer<typeof pesquisaSchema>;
+
+// Pesquisa os retratos do BSC: o mais recente de cada página dentro do período,
+// já no escopo das bases e refinado por página, placa e base.
+async function pesquisarBsc(role: string, userId: string, f: Pesquisa) {
+  const cond: string[] = [];
+  const args: unknown[] = [];
+  if (f.de) { args.push(f.de); cond.push(`(coletado_em AT TIME ZONE 'America/Sao_Paulo')::date >= $${args.length}::date`); }
+  if (f.ate) { args.push(f.ate); cond.push(`(coletado_em AT TIME ZONE 'America/Sao_Paulo')::date <= $${args.length}::date`); }
+  const where = cond.length ? `WHERE ${cond.join(" AND ")}` : "";
+  const rows = await withRole(role as any, userId, async (c) => ({
+    snaps: (await c.query(`SELECT DISTINCT ON (pagina) id, pagina, coletado_em, linhas, tabelas, numeros FROM bsc_snapshots ${where} ORDER BY pagina, coletado_em DESC`, args)).rows,
+    todas: (await c.query(`SELECT DISTINCT pagina FROM bsc_snapshots ORDER BY pagina`)).rows.map((r: any) => r.pagina as string),
+  }));
+  const placasEscopo = await placasDoEscopo();
+  let refino: Set<string> | undefined;
+  if (f.placa) refino = new Set([normPlaca(f.placa)]);
+  if (f.base) {
+    const r = await withRole("superadmin", "", (c) => c.query(`SELECT placa FROM vehicles WHERE upper(base) = upper($1)`, [f.base]));
+    const daBase = new Set(r.rows.map((x: any) => normPlaca(x.placa)));
+    refino = refino ? new Set([...refino].filter((p) => daBase.has(p))) : daBase;
+  }
+  const refinar = Boolean(f.placa || f.base);
+  const paginas = rows.snaps
+    .filter((p: any) => !f.pagina || p.pagina === f.pagina)
+    .map((p: any) => {
+      const r = aplicarEscopo(repararDeep({ linhas: p.linhas, tabelas: p.tabelas, numeros: p.numeros }), placasEscopo);
+      if (!refinar) return { id: p.id, pagina: p.pagina, coletado_em: p.coletado_em, ...r };
+      const tabelas = r.tabelas.map((t) => refinarTabela(t, { placas: refino, base: f.placa ? undefined : f.base })).filter((t): t is string[][] => !!t && t.length > 1);
+      return { id: p.id, pagina: p.pagina, coletado_em: p.coletado_em, linhas: r.linhas.filter((l) => /^(Atualização|Coletado)/.test(l)), tabelas, numeros: [] as { rotulo: string; valor: string }[] };
+    })
+    .filter((p: any) => p.tabelas.length > 0 || p.numeros.length > 0);
+  return { paginas, todasPaginas: rows.todas };
+}
+
+// Pesquisa (tela): sem datas, devolve o último retrato de cada página.
+bscRouter.get("/pesquisa", requireAuth, requireRole("superadmin", "admin"), async (req, res) => {
+  const p = pesquisaSchema.safeParse(req.query);
+  if (!p.success) return res.status(400).json({ error: "Filtros inválidos." });
+  if (p.data.de && p.data.ate && p.data.de > p.data.ate) return res.status(400).json({ error: "A data inicial não pode ser depois da final." });
   try {
-    const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
-      const aut = await autorParaPdf(c, req.auth!.sub);
-      if ("erro" in aut) return { erro: aut.erro, status: 409 };
-      const rows = (await c.query(
-        `SELECT DISTINCT ON (pagina) pagina, coletado_em, linhas, tabelas, numeros FROM bsc_snapshots
-          WHERE (coletado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN $1::date AND $2::date
-          ORDER BY pagina, coletado_em DESC`, [de, ate])).rows;
-      return { autor: aut.autor, rows };
-    });
-    if ("erro" in out) return res.status(409).json({ error: out.erro, code: "perfil_incompleto" });
-    const placas = await placasDoEscopo();
-    const paginas = out.rows
-      .map((p: any) => ({ pagina: p.pagina, coletado_em: p.coletado_em, ...aplicarEscopo(repararDeep({ linhas: p.linhas, tabelas: p.tabelas, numeros: p.numeros }), placas) }))
-      .filter((p: any) => p.tabelas.length > 0 || p.numeros.length > 0);
-    if (!paginas.length) return res.status(404).json({ error: "Não há retrato do BSC coletado nesse período. Escolha outras datas." });
-    const doc = pdfBsc({ autor: out.autor, de, ate, bases: env.vec.bases, paginas });
+    const r = await pesquisarBsc(req.auth!.role, req.auth!.sub, p.data);
+    res.json({ configurado: Boolean(env.bsc.ingestToken), bases: env.vec.bases, paginas: r.paginas, todas_paginas: r.todasPaginas });
+  } catch (err: any) {
+    console.error("BSC pesquisa falhou:", err?.code, err?.message);
+    res.status(500).json({ error: "Falha ao pesquisar o BSC." });
+  }
+});
+
+// PDF do BSC: usa exatamente os mesmos filtros da pesquisa (período obrigatório).
+bscRouter.get("/pdf", requireAuth, requireRole("superadmin", "admin"), async (req, res) => {
+  const p = pesquisaSchema.safeParse(req.query);
+  if (!p.success || !p.data.de || !p.data.ate) return res.status(400).json({ error: "Informe a data inicial e a final e pesquise antes de baixar." });
+  const f = p.data;
+  if (f.de! > f.ate!) return res.status(400).json({ error: "A data inicial não pode ser depois da final." });
+  try {
+    const aut = await withRole(req.auth!.role, req.auth!.sub, (c) => autorParaPdf(c, req.auth!.sub));
+    if ("erro" in aut) return res.status(409).json({ error: aut.erro, code: "perfil_incompleto" });
+    const r = await pesquisarBsc(req.auth!.role, req.auth!.sub, f);
+    if (!r.paginas.length) return res.status(404).json({ error: "Não há dados do BSC para esses filtros. Ajuste a pesquisa." });
+    const filtro = [f.pagina ? `página ${f.pagina}` : "", f.base ? `base ${f.base}` : "", f.placa ? `placa ${f.placa.toUpperCase()}` : ""].filter(Boolean).join(" · ");
+    const doc = pdfBsc({ autor: aut.autor, de: f.de!, ate: f.ate!, bases: env.vec.bases, paginas: r.paginas as any, filtro });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="bsc_${de}_${ate}.pdf"`);
+    res.setHeader("Content-Disposition", `inline; filename="bsc_${f.de}_${f.ate}.pdf"`);
     res.setHeader("Cache-Control", "private, no-store");
     doc.pipe(res); doc.end();
   } catch (err: any) {
