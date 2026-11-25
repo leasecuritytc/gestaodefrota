@@ -46,7 +46,6 @@ export default function ManutencoesPage() {
   const [dataEntrada, setDataEntrada] = useState("");
   const [dataSaida, setDataSaida] = useState("");
   const [previsao, setPrevisao] = useState("");
-  const [custo, setCusto] = useState("0");
   const [erroForm, setErroForm] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -73,7 +72,6 @@ export default function ManutencoesPage() {
         data_entrada: dataEntrada,
         data_saida: dataSaida || undefined,
         previsao_saida: previsao || undefined,
-        custo: Number(custo) || 0,
       });
       setMostrarForm(false);
       setPlaca("");
@@ -83,7 +81,6 @@ export default function ManutencoesPage() {
       setDataEntrada("");
       setDataSaida("");
       setPrevisao("");
-      setCusto("0");
       carregar();
     } catch (err) {
       setErroForm(mensagemErro(err, "Não foi possível registrar a manutenção."));
@@ -100,7 +97,6 @@ export default function ManutencoesPage() {
       oficina: m.oficina,
       data_saida: m.data_saida ? m.data_saida.slice(0, 10) : null,
       previsao_saida: m.previsao_saida ? m.previsao_saida.slice(0, 10) : null,
-      custo: m.custo,
       status: m.status,
     });
     setErroEdit(null);
@@ -113,7 +109,6 @@ export default function ManutencoesPage() {
     try {
       await api.patch(`/maintenance/${editando.id}`, {
         ...formEdit,
-        custo: formEdit.custo !== undefined ? Number(formEdit.custo) : undefined,
         data_saida: formEdit.data_saida || null,
         previsao_saida: formEdit.previsao_saida || null,
       });
@@ -192,16 +187,6 @@ export default function ManutencoesPage() {
             <label>Previsão de saída</label>
             <input type="date" value={previsao} onChange={(e) => setPrevisao(e.target.value)} />
           </div>
-          <div className="campo">
-            <label>Custo (R$)</label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={custo}
-              onChange={(e) => setCusto(e.target.value)}
-            />
-          </div>
           <button className="btn btn-primario" disabled={salvando}>
             {salvando ? "Salvando..." : "Salvar"}
           </button>
@@ -220,7 +205,6 @@ export default function ManutencoesPage() {
                 <th>Entrada</th>
                 <th>Previsão de saída</th>
                 <th>Saída</th>
-                <th>Custo</th>
                 <th>Status</th>
                 {podeEditar && <th></th>}
               </tr>
@@ -241,9 +225,6 @@ export default function ManutencoesPage() {
                     )}
                   </td>
                   <td>{m.data_saida ? fmtDia(m.data_saida) : "—"}</td>
-                  <td>
-                    {Number(m.custo).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </td>
                   <td>
                     <span className={`tag tag-${m.status === "Concluída" ? "concluida" : "em_andamento"}`}>
                       {m.status}
@@ -307,16 +288,6 @@ export default function ManutencoesPage() {
                 type="date"
                 value={formEdit.data_saida ?? ""}
                 onChange={(e) => setFormEdit((f) => ({ ...f, data_saida: e.target.value }))}
-              />
-            </div>
-            <div className="campo">
-              <label>Custo (R$)</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={formEdit.custo ?? ""}
-                onChange={(e) => setFormEdit((f) => ({ ...f, custo: e.target.value as any }))}
               />
             </div>
             <div className="acoes">
