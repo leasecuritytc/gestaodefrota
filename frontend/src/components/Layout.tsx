@@ -48,7 +48,7 @@ export default function Layout() {
       <div className="faixa-risco" aria-hidden="true" />
       <header className="navbar">
         <div className="navbar-marca">
-          <span className="navbar-logo" aria-hidden="true">🚛</span>
+          <img className="navbar-logo" src="/icon-192.png" alt="" width={36} height={36} />
           <div>
             <strong>GESTÃO DE FROTA</strong>
             <span className="navbar-subtitulo">RodaCoop — O melhor sempre vai chegar.</span>

@@ -31,7 +31,8 @@ export default function LoginPage() {
     <div className="auth-shell">
       <VideoFundo />
       <form className="auth-card" onSubmit={onSubmit}>
-        <h1>GESTÃO DE FROTA</h1>
+        <img className="auth-logo" src="/logo.jpg" alt="Gestão de Frotas — Liderança em Logística" />
+        <h1 className="sr-only">GESTÃO DE FROTA</h1>
         <p className="subtitulo">Entre com seu e-mail e senha para acessar a plataforma.</p>
         {erro && <div className="erro">{erro}</div>}
         <div className="campo">

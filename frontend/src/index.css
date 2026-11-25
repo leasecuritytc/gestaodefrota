@@ -284,7 +284,26 @@ textarea {
 }
 
 .navbar-logo {
-  font-size: 28px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: block;
+}
+.auth-logo {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  margin: 0 auto 14px;
+  border-radius: 12px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .navbar-marca strong {
