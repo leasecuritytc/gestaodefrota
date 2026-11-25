@@ -61,6 +61,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   const [ocupado, setOcupado] = useState(false);
   const { usuario } = useAuth();
   const [editando, setEditando] = useState(false);
+  const [confirmar, setConfirmar] = useState<null | "concluir" | "edicao">(null);
   const [motivo, setMotivo] = useState("");
   const [obsEdicao, setObsEdicao] = useState("");
   const refArq = useRef<HTMLInputElement>(null);
@@ -111,7 +112,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   }
 
   async function concluir() {
-    if (!window.confirm("Concluir o checklist? Depois de concluído ele não pode mais ser alterado.")) return;
+    setConfirmar(null);
     setOcupado(true); setMsg(null);
     try {
       const r = await api.post(`/checklists-proprios/${id}/concluir`, corpo());
@@ -122,7 +123,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   }
 
   async function salvarEdicao() {
-    if (!window.confirm(`Salvar a edição ${(det?.edicoes ?? 0) + 1} de 3? Depois de salva ela não pode ser desfeita e fica registrada no histórico.`)) return;
+    setConfirmar(null);
     setOcupado(true); setMsg(null);
     try {
       const r = await api.post(`/checklists-proprios/${id}/editar`, { ...corpo(), motivo, observacoes_edicao: obsEdicao });
@@ -228,6 +229,20 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
           {!leitura && !editando && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "geral"; refArq.current?.click(); }}>📷 Adicionar foto</button>}
         </div>
       </div>
+      {confirmar && (
+        <div className="modal-fundo" onClick={() => setConfirmar(null)}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h2>{confirmar === "concluir" ? "Concluir o checklist?" : `Salvar a edição ${det.edicoes + 1} de 3?`}</h2>
+            <p className="subtitulo">{confirmar === "concluir"
+              ? "Depois de concluído, só dá para alterar por edição (máximo 3, com motivo e observações). Falhas críticas abrem uma ocorrência automaticamente."
+              : "Depois de salva, a edição não pode ser desfeita e fica registrada no histórico."}</p>
+            <div className="acoes">
+              <button type="button" className="btn btn-secundario" onClick={() => setConfirmar(null)}>Voltar</button>
+              <button type="button" className="btn btn-primario" style={{ width: "auto" }} onClick={confirmar === "concluir" ? concluir : salvarEdicao}>{confirmar === "concluir" ? "Sim, concluir" : "Sim, salvar edição"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <input ref={refArq} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void enviarFoto(f); }} />
       {editando && (
         <div className="painel">
@@ -239,7 +254,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
             <textarea id="ed-obs" rows={3} maxLength={2000} value={obsEdicao} onChange={(e) => setObsEdicao(e.target.value)} placeholder="Descreva o que foi alterado e o que foi conferido." /></div>
           <div className="acoes">
             <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={cancelarEdicao}>Cancelar edição</button>
-            <button type="button" className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || motivo.trim().length < 10 || obsEdicao.trim().length < 5 || kmBaixo} onClick={salvarEdicao}>Salvar edição</button>
+            <button type="button" className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || motivo.trim().length < 10 || obsEdicao.trim().length < 5 || kmBaixo} onClick={() => setConfirmar("edicao")}>Salvar edição</button>
           </div>
         </div>
       )}
@@ -260,7 +275,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
         <div className="insp-rodape">
           <span>{respondidos}/{itens.length} itens{pendencias.length > 0 && <small className="insp-sub"> · falta: {pendencias.join("; ")}</small>}</span>
           <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={salvar}>Salvar rascunho</button>
-          <button type="button" className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || !podeConcluir} onClick={concluir}>Concluir</button>
+          <button type="button" className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || !podeConcluir} onClick={() => setConfirmar("concluir")}>Concluir</button>
         </div>
       )}
     </div>
