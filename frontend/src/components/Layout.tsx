@@ -19,6 +19,7 @@ const ICONES: Record<string, ReactNode> = {
   bases: I(<><path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="9" r="2.5" /></>),
   motoristas: I(<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>),
   usuarios: I(<><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5" /></>),
+  relatorios: I(<><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 13h7M9 17h7M9 9h2" /></>),
   pendencias: I(<><path d="M12 3 2.5 20h19z" /><path d="M12 10v4M12 17.5v.01" /></>),
   auditoria: I(<><path d="M12 3 4 6v6c0 4.5 3.2 8 8 9 4.8-1 8-4.5 8-9V6z" /><path d="m9 12 2 2 4-4" /></>),
 };
@@ -33,6 +34,7 @@ const PRINCIPAIS: Item[] = [
 ];
 const GESTAO: Item[] = [
   { to: "/checklists", label: "Checklists VEC", icone: "checklists", papeis: ["superadmin", "admin"] },
+  { to: "/relatorios", label: "Relatórios", icone: "relatorios", papeis: ["superadmin", "admin"] },
   { to: "/pendencias", label: "Pendências", icone: "pendencias", papeis: ["superadmin", "admin"] },
   { to: "/bsc", label: "BSC", icone: "bsc", papeis: ["superadmin", "admin"] },
   { to: "/bases", label: "Bases", icone: "bases", papeis: ["superadmin", "admin"] },
@@ -163,7 +165,11 @@ export default function Layout() {
           </button>
           <div className="lat-usuario">
             <span className="avatar" aria-hidden="true">{iniciais(usuario?.full_name ?? usuario?.email)}</span>
-            <span className="lat-txt lat-usuario-txt"><strong>{usuario?.full_name ?? usuario?.email}</strong><small>{nomePapel}</small></span>
+            {ehAdmin ? (
+              <NavLink to="/perfil" className="lat-txt lat-usuario-txt" title="Meu cadastro" style={{ textDecoration: "none", color: "inherit" }}><strong>{usuario?.full_name ?? usuario?.email}</strong><small>{nomePapel} · Meu cadastro</small></NavLink>
+            ) : (
+              <span className="lat-txt lat-usuario-txt"><strong>{usuario?.full_name ?? usuario?.email}</strong><small>{nomePapel}</small></span>
+            )}
             <button type="button" className="lat-sair" onClick={sair} aria-label="Sair" title="Sair">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
             </button>

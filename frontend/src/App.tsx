@@ -18,6 +18,8 @@ import ChecklistsPage from "./pages/ChecklistsPage";
 import InspecoesPage from "./pages/InspecoesPage";
 import BscPage from "./pages/BscPage";
 import PendenciasPage from "./pages/PendenciasPage";
+import PerfilPage from "./pages/PerfilPage";
+import RelatoriosPage from "./pages/RelatoriosPage";
 
 export default function App() {
   return (
@@ -80,6 +82,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="relatorios" element={<ProtectedRoute papeis={["superadmin", "admin"]}><RelatoriosPage /></ProtectedRoute>} />
+          <Route path="perfil" element={<ProtectedRoute papeis={["superadmin", "admin"]}><PerfilPage /></ProtectedRoute>} />
           <Route path="pendencias" element={<ProtectedRoute papeis={["superadmin", "admin"]}><PendenciasPage /></ProtectedRoute>} />
           <Route
             path="motoristas"

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, mensagemErro } from "../api";
+import { useAuth } from "../auth";
 import OperationalMap from "../components/OperationalMap";
 import { BarraEmpilhadaHorizontal, BarraVertical, LinhaEvolucao, Rosca } from "../components/Charts";
 
@@ -50,6 +51,7 @@ type Aba = "visao_geral" | "evolucao" | "relatorios";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [evolucao, setEvolucao] = useState<PontoEvolucao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -105,6 +107,9 @@ export default function DashboardPage() {
           <span className="hero-selo">
             {totalVeiculos > 0 ? `${totalVeiculos} veículos · ` : ""}SMG3, SMG5, SMG9
           </span>
+          {["superadmin", "admin"].includes(usuario?.role ?? "") && (
+            <div style={{ marginTop: 14 }}><button className="btn btn-primario" style={{ width: "auto" }} onClick={() => navigate("/relatorios")}>Gerar relatório em PDF</button></div>
+          )}
         </div>
         <div className="hero-painel-midia" aria-hidden="true">
           <video
