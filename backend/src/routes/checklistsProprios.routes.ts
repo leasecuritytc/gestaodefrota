@@ -106,7 +106,7 @@ checklistsProprioRouter.get("/", LEITURA, h(async (req, res) => {
 async function carregar(c: PoolClient, id: string) {
   const ex = await c.query(
     `SELECT x.id, x.vehicle_id, v.placa, x.base, x.data_hora, x.km, x.status, x.num_falhas, x.observacoes,
-            x.ocorrencia_id, x.km_original, x.km_observacao, x.km_corrigido_em, coalesce(u.full_name, u.email) AS executor
+            x.ocorrencia_id, x.edicoes, x.executado_por, x.km_original, x.km_observacao, x.km_corrigido_em, coalesce(u.full_name, u.email) AS executor
      FROM checklist_execucoes x JOIN vehicles v ON v.id = x.vehicle_id LEFT JOIN users u ON u.id = x.executado_por
      WHERE x.id = $1`,
     [id]
@@ -115,7 +115,10 @@ async function carregar(c: PoolClient, id: string) {
   const resp = await c.query(`SELECT item_id, resultado, observacao FROM checklist_respostas WHERE execucao_id = $1`, [id]);
   const fotos = await c.query(`SELECT id, item_id, tipo, mime, tamanho FROM checklist_fotos WHERE execucao_id = $1 ORDER BY created_at`, [id]);
   const kmInfo = await kmMinimoInfo(c, ex.rows[0].vehicle_id, id);
-  return { ...ex.rows[0], km_minimo: kmInfo?.valor ?? null, km_fonte: kmInfo?.fonte ?? null, km_fonte_data: kmInfo?.data ?? null, respostas: resp.rows, fotos: fotos.rows };
+  const hist = await c.query(
+    `SELECT e.numero, e.motivo, e.observacoes, e.editado_em, coalesce(u.full_name, u.email) AS editado_por, e.antes, e.depois
+       FROM checklist_edicoes e LEFT JOIN users u ON u.id = e.editado_por WHERE e.execucao_id = $1 ORDER BY e.numero`, [id]);
+  return { ...ex.rows[0], historico_edicoes: hist.rows, edicoes_restantes: 3 - Number(ex.rows[0].edicoes ?? 0), km_minimo: kmInfo?.valor ?? null, km_fonte: kmInfo?.fonte ?? null, km_fonte_data: kmInfo?.data ?? null, respostas: resp.rows, fotos: fotos.rows };
 }
 
 checklistsProprioRouter.get("/:id", LEITURA, h(async (req, res) => {
@@ -365,6 +368,91 @@ checklistsProprioRouter.put("/:id/km-corrigir", ADMIN, h(async (req, res) => {
     );
     await registrarAuditoria(c, req.auth!.sub, "km_checklist_corrigido", "checklist_execucoes", id, { km_anterior: ex.km != null ? Number(ex.km) : null, km_novo: p.data.km, observacao: p.data.observacao });
     return { ok: true };
+  });
+  if ("erro" in out) return res.status(out.erro as number).json({ error: out.msg });
+  res.json(out);
+}));
+
+// ===== Edição de checklist concluído: máx. 3 vezes, cada uma com motivo e observações =====
+const MAX_EDICOES = 3;
+const editarSchema = salvarSchema.extend({
+  motivo: z.string().trim().min(10, "Descreva o motivo da edição (mín. 10 caracteres).").max(1000),
+  observacoes_edicao: z.string().trim().min(5, "Preencha as observações da edição (mín. 5 caracteres).").max(2000),
+});
+
+checklistsProprioRouter.post("/:id/editar", ESCRITA, h(async (req, res) => {
+  const id = req.params.id as string;
+  if (!uuid.safeParse(id).success) return res.status(400).json({ error: "ID inválido." });
+  const p = editarSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message ?? "Dados inválidos." });
+  const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    const ex = (await c.query(`SELECT * FROM checklist_execucoes WHERE id = $1 FOR UPDATE`, [id])).rows[0];
+    if (!ex) return { erro: 404, msg: "Checklist não encontrado." };
+    if (ex.status !== "Concluido") return { erro: 409, msg: "Este checklist ainda é rascunho: edite e conclua normalmente." };
+    const ehAdmin = ["superadmin", "admin"].includes(req.auth!.role);
+    if (!ehAdmin && ex.executado_por !== req.auth!.sub) return { erro: 403, msg: "Só quem executou a inspeção (ou um admin) pode editá-la." };
+    if (Number(ex.edicoes) >= MAX_EDICOES) return { erro: 409, msg: `Limite de ${MAX_EDICOES} edições atingido para esta inspeção.` };
+
+    const itens = (await c.query(`SELECT id, texto, critico FROM checklist_itens WHERE ativo`)).rows;
+    const ids = new Set(itens.map((i) => i.id));
+    if (p.data.respostas.some((r) => !ids.has(r.item_id))) return { erro: 400, msg: "Há item inexistente ou inativo na lista." };
+    const antesResp = (await c.query(`SELECT item_id, resultado, observacao FROM checklist_respostas WHERE execucao_id = $1`, [id])).rows;
+    const antes = { km: ex.km != null ? Number(ex.km) : null, observacoes: ex.observacoes, num_falhas: ex.num_falhas, respostas: antesResp };
+
+    // valida o resultado final (respostas enviadas sobrepõem as existentes)
+    const final = new Map<string, { resultado: string; observacao: string | null }>(antesResp.map((r) => [r.item_id, r]));
+    for (const r of p.data.respostas) final.set(r.item_id, { resultado: r.resultado, observacao: r.observacao?.trim() || null });
+    const faltando = itens.filter((i) => !final.has(i.id));
+    if (faltando.length) return { erro: 400, msg: `Faltam ${faltando.length} item(ns) sem resposta.` };
+    const semObs = itens.filter((i) => final.get(i.id)!.resultado === "FALHA" && (final.get(i.id)!.observacao ?? "").length < 5);
+    if (semObs.length) return { erro: 400, msg: `Descreva a falha (mín. 5 caracteres) em: ${semObs.map((i) => i.texto).join("; ")}.` };
+    const novoKm = p.data.km ?? (ex.km != null ? Number(ex.km) : null);
+    if (novoKm == null) return { erro: 400, msg: "Informe a quilometragem." };
+    if (p.data.km != null && Number(p.data.km) !== Number(ex.km)) {
+      const min = await kmMinimoInfo(c, ex.vehicle_id, id);
+      if (min && p.data.km < min.valor) return { erro: 400, msg: msgKm(min) };
+    }
+    const mudou = p.data.respostas.some((r) => {
+      const a = antesResp.find((x) => x.item_id === r.item_id);
+      return !a || a.resultado !== r.resultado || (a.observacao ?? "") !== (r.observacao?.trim() ?? "");
+    }) || novoKm !== (ex.km != null ? Number(ex.km) : null) || (p.data.observacoes ?? null) !== (ex.observacoes ?? null);
+    if (!mudou) return { erro: 400, msg: "Nenhuma alteração foi feita. Altere algum campo antes de salvar a edição." };
+
+    for (const r of p.data.respostas) {
+      await c.query(
+        `INSERT INTO checklist_respostas (execucao_id, item_id, resultado, observacao) VALUES ($1,$2,$3,$4)
+         ON CONFLICT (execucao_id, item_id) DO UPDATE SET resultado = EXCLUDED.resultado, observacao = EXCLUDED.observacao`,
+        [id, r.item_id, r.resultado, r.observacao?.trim() || null]
+      );
+    }
+    const falhas = itens.filter((i) => final.get(i.id)!.resultado === "FALHA");
+    const criticas = falhas.filter((i) => i.critico);
+    let ocorrenciaId: string | null = ex.ocorrencia_id;
+    if (criticas.length) {
+      const desc = `Checklist de ${new Date(ex.data_hora).toLocaleDateString("pt-BR")} (editado) — falha(s) crítica(s): ` +
+        criticas.map((i) => `${i.texto} (${(final.get(i.id)!.observacao ?? "").trim()})`).join("; ");
+      if (ocorrenciaId) await c.query(`UPDATE occurrences SET descricao = $2 WHERE id = $1`, [ocorrenciaId, desc.slice(0, 2000)]);
+      else {
+        const oc = await c.query(
+          `INSERT INTO occurrences (vehicle_id, tipo, descricao, anexos) VALUES ($1, 'manutencao_solicitada', $2, $3) RETURNING id`,
+          [ex.vehicle_id, desc.slice(0, 2000), JSON.stringify([{ origem: "checklist", execucao_id: id }])]
+        );
+        ocorrenciaId = oc.rows[0].id;
+      }
+    }
+    const numero = Number(ex.edicoes) + 1;
+    const depoisResp = (await c.query(`SELECT item_id, resultado, observacao FROM checklist_respostas WHERE execucao_id = $1`, [id])).rows;
+    const depois = { km: novoKm, observacoes: p.data.observacoes ?? null, num_falhas: falhas.length, respostas: depoisResp };
+    await c.query(
+      `UPDATE checklist_execucoes SET km = $2, observacoes = $3, num_falhas = $4, ocorrencia_id = $5, edicoes = $6 WHERE id = $1`,
+      [id, novoKm, p.data.observacoes ?? null, falhas.length, ocorrenciaId, numero]
+    );
+    await c.query(
+      `INSERT INTO checklist_edicoes (execucao_id, numero, motivo, observacoes, editado_por, antes, depois) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [id, numero, p.data.motivo, p.data.observacoes_edicao, req.auth!.sub, JSON.stringify(antes), JSON.stringify(depois)]
+    );
+    await registrarAuditoria(c, req.auth!.sub, "checklist_editado", "checklist_execucoes", id, { numero, motivo: p.data.motivo, observacoes: p.data.observacoes_edicao, falhas_antes: antes.num_falhas, falhas_depois: falhas.length });
+    return { ok: true, numero, restantes: MAX_EDICOES - numero, num_falhas: falhas.length, ocorrencia_id: ocorrenciaId };
   });
   if ("erro" in out) return res.status(out.erro as number).json({ error: out.msg });
   res.json(out);

@@ -7,7 +7,7 @@ interface Item { id: string; categoria: string; texto: string; critico: boolean;
 interface Veic { id: string; placa: string; base: string; tipo: string | null; status: string; chassi: string | null; rentadora: string | null; ultimo_km: string | null; km_minimo: number | null; km_fonte: "referencia" | "checklist" | "vec" | null; km_ref: number | null; km_vec: number | null; ultimo_proprio: string | null; ultimo_vec: string | null; estado_vec: string | null; vencido: boolean; rascunho_id: string | null }
 interface Linha { id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; ocorrencia_id: string | null; executor: string | null; km_corrigido_em: string | null }
 interface FotoMeta { id: string; item_id: string | null; tipo: "odometro" | "item" | "geral"; mime: string; tamanho: number }
-interface Detalhe { km_minimo: number | null; km_fonte: "referencia" | "checklist" | "vec" | null; km_original: string | null; km_observacao: string | null; km_corrigido_em: string | null; id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; observacoes: string | null; ocorrencia_id: string | null; executor: string | null; respostas: { item_id: string; resultado: Resultado; observacao: string | null }[]; fotos: FotoMeta[] }
+interface Detalhe { km_minimo: number | null; km_fonte: "referencia" | "checklist" | "vec" | null; km_original: string | null; km_observacao: string | null; km_corrigido_em: string | null; id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; observacoes: string | null; ocorrencia_id: string | null; executor: string | null; executado_por: string | null; edicoes: number; edicoes_restantes: number; historico_edicoes: { numero: number; motivo: string; observacoes: string; editado_em: string; editado_por: string | null; antes: { km: number | null; num_falhas: number }; depois: { km: number | null; num_falhas: number } }[]; respostas: { item_id: string; resultado: Resultado; observacao: string | null }[]; fotos: FotoMeta[] }
 
 const fmtData = (v: string | null) => (v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
 const CIDADES: Record<string, string> = { SMG3: "Pouso Alegre/MG", SMG5: "Poços de Caldas/MG", SMG9: "Varginha/MG" };
@@ -59,6 +59,10 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   const [obs, setObs] = useState("");
   const [msg, setMsg] = useState<{ tipo: "erro" | "sucesso"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const { usuario } = useAuth();
+  const [editando, setEditando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [obsEdicao, setObsEdicao] = useState("");
   const refArq = useRef<HTMLInputElement>(null);
   const itemFoto = useRef<string | null>(null);
   const tipoFoto = useRef<"odometro" | "item" | "geral">("geral");
@@ -72,7 +76,10 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   }, [id]);
   useEffect(() => { carregar().catch((e) => setMsg({ tipo: "erro", texto: mensagemErro(e) })); }, [carregar]);
 
-  const leitura = somenteLeitura || det?.status === "Concluido";
+  const concluido = det?.status === "Concluido";
+  const ehAdminUsr = usuario?.role === "admin" || usuario?.role === "superadmin";
+  const podeEditar = concluido && (ehAdminUsr || (usuario?.role === "gestor_base" && det?.executado_por === usuario?.id)) && (det?.edicoes_restantes ?? 0) > 0;
+  const leitura = concluido ? !editando : somenteLeitura;
   const respondidos = itens.filter((i) => resp[i.id]).length;
   const grupos = useMemo(() => {
     const m = new Map<string, Item[]>();
@@ -114,6 +121,19 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
     finally { setOcupado(false); }
   }
 
+  async function salvarEdicao() {
+    if (!window.confirm(`Salvar a edição ${(det?.edicoes ?? 0) + 1} de 3? Depois de salva ela não pode ser desfeita e fica registrada no histórico.`)) return;
+    setOcupado(true); setMsg(null);
+    try {
+      const r = await api.post(`/checklists-proprios/${id}/editar`, { ...corpo(), motivo, observacoes_edicao: obsEdicao });
+      setEditando(false); setMotivo(""); setObsEdicao("");
+      await carregar();
+      setMsg({ tipo: "sucesso", texto: `Edição ${r.data.numero} salva. ${r.data.restantes > 0 ? `Restam ${r.data.restantes} edição(ões).` : "Esta inspeção não aceita mais edições."}` });
+    } catch (e) { setMsg({ tipo: "erro", texto: mensagemErro(e, "Não foi possível salvar a edição.") }); }
+    finally { setOcupado(false); }
+  }
+  function cancelarEdicao() { setEditando(false); setMotivo(""); setObsEdicao(""); void carregar(); }
+
   async function enviarFoto(file: File) {
     setOcupado(true); setMsg(null);
     try {
@@ -140,6 +160,15 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
         {det.status === "Concluido" ? `Concluído em ${fmtData(det.data_hora)} por ${det.executor ?? "—"}` : "Rascunho"} · {det.num_falhas > 0 && det.status === "Concluido" ? `${det.num_falhas} falha(s)` : `${respondidos}/${itens.length} itens`}
       </p>
       {msg && <div className={msg.tipo === "erro" ? "erro" : "sucesso"} role="status" aria-live="polite">{msg.texto}</div>}
+      {concluido && !somenteLeitura && (
+        <div className="painel">
+          <strong>Edições desta inspeção: {det.edicoes} de 3 usadas</strong>
+          {podeEditar && !editando && <div style={{ marginTop: 8 }}><button type="button" className="btn btn-primario" style={{ width: "auto" }} onClick={() => setEditando(true)}>✎ Editar inspeção (restam {det.edicoes_restantes})</button></div>}
+          {!podeEditar && det.edicoes_restantes <= 0 && <small className="insp-sub" style={{ display: "block" }}>Limite de 3 edições atingido. Esta inspeção não pode mais ser alterada.</small>}
+          {!podeEditar && det.edicoes_restantes > 0 && <small className="insp-sub" style={{ display: "block" }}>Só quem executou a inspeção ou um admin pode editá-la.</small>}
+          {editando && <small className="insp-sub" style={{ display: "block" }}>Modo de edição: altere o que precisar e, no fim da página, informe o motivo e as observações. Fotos não são alteradas na edição.</small>}
+        </div>
+      )}
       <div className="painel">
         <h2>Odômetro</h2>
         <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Confira o número no painel do veículo e digite exatamente como aparece. A foto precisa mostrar a quilometragem legível. O km não pode ser menor que o já registrado. Depois de concluída a inspeção, só um admin pode corrigir o km.</span></div>
@@ -151,8 +180,8 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
         {kmBaixo && <div className="erro" role="alert" style={{ marginTop: 8 }}>Quilometragem menor que a já lançada ({det.km_minimo!.toLocaleString("pt-BR")} km). Confira o odômetro.</div>}
         <div className="insp-fotos" style={{ marginTop: 12 }}>
           <strong style={{ fontSize: 13 }}>Foto do odômetro (obrigatória) *</strong>
-          {fotoOdo && <Foto key={fotoOdo.id} id={fotoOdo.id} onRemover={leitura ? undefined : () => removerFoto(fotoOdo.id)} />}
-          {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "odometro"; refArq.current?.click(); }}>{fotoOdo ? "📷 Trocar foto" : "📷 Fotografar odômetro"}</button>}
+          {fotoOdo && <Foto key={fotoOdo.id} id={fotoOdo.id} onRemover={leitura || editando ? undefined : () => removerFoto(fotoOdo.id)} />}
+          {!leitura && !editando && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "odometro"; refArq.current?.click(); }}>{fotoOdo ? "📷 Trocar foto" : "📷 Fotografar odômetro"}</button>}
         </div>
       </div>
       {grupos.map(([cat, lista]) => (
@@ -181,8 +210,8 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
                     <input placeholder="Descreva a falha (mín. 5 caracteres)" value={r.observacao} disabled={leitura} maxLength={1000}
                       onChange={(e) => setResp({ ...resp, [i.id]: { ...r, observacao: e.target.value } })} />
                     <div className="insp-fotos">
-                      {fotos.map((f) => <Foto key={f.id} id={f.id} onRemover={leitura ? undefined : () => removerFoto(f.id)} />)}
-                      {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = i.id; tipoFoto.current = "item"; refArq.current?.click(); }}>📷 Adicionar foto</button>}
+                      {fotos.map((f) => <Foto key={f.id} id={f.id} onRemover={leitura || editando ? undefined : () => removerFoto(f.id)} />)}
+                      {!leitura && !editando && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = i.id; tipoFoto.current = "item"; refArq.current?.click(); }}>📷 Adicionar foto</button>}
                     </div>
                   </div>
                 )}
@@ -195,12 +224,39 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
         <h2>Observações gerais e fotos gerais</h2>
         <textarea className="insp-obs" rows={3} maxLength={2000} value={obs} disabled={leitura} onChange={(e) => setObs(e.target.value)} placeholder="Opcional" />
         <div className="insp-fotos">
-          {det.fotos.filter((f) => f.tipo === "geral").map((f) => <Foto key={f.id} id={f.id} onRemover={leitura ? undefined : () => removerFoto(f.id)} />)}
-          {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "geral"; refArq.current?.click(); }}>📷 Adicionar foto</button>}
+          {det.fotos.filter((f) => f.tipo === "geral").map((f) => <Foto key={f.id} id={f.id} onRemover={leitura || editando ? undefined : () => removerFoto(f.id)} />)}
+          {!leitura && !editando && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "geral"; refArq.current?.click(); }}>📷 Adicionar foto</button>}
         </div>
       </div>
       <input ref={refArq} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void enviarFoto(f); }} />
-      {!leitura && (
+      {editando && (
+        <div className="painel">
+          <h2>Registro da edição {det.edicoes + 1} de 3</h2>
+          <div className="insp-aviso" role="note"><strong>Esta edição fica registrada</strong><span>O histórico guarda quem editou, quando, o motivo, as observações e o antes e depois. Cada inspeção aceita no máximo 3 edições.</span></div>
+          <div className="campo"><label htmlFor="ed-motivo">Motivo da edição * (mín. 10 caracteres)</label>
+            <input id="ed-motivo" value={motivo} maxLength={1000} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: Item marcado como OK por engano; pneu estava com desgaste." /></div>
+          <div className="campo"><label htmlFor="ed-obs">Observações da edição * (mín. 5 caracteres)</label>
+            <textarea id="ed-obs" rows={3} maxLength={2000} value={obsEdicao} onChange={(e) => setObsEdicao(e.target.value)} placeholder="Descreva o que foi alterado e o que foi conferido." /></div>
+          <div className="acoes">
+            <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={cancelarEdicao}>Cancelar edição</button>
+            <button type="button" className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || motivo.trim().length < 10 || obsEdicao.trim().length < 5 || kmBaixo} onClick={salvarEdicao}>Salvar edição</button>
+          </div>
+        </div>
+      )}
+      {concluido && det.historico_edicoes.length > 0 && (
+        <div className="painel">
+          <h2>Histórico de edições</h2>
+          {det.historico_edicoes.map((h) => (
+            <div key={h.numero} className="insp-aviso" style={{ marginBottom: 8 }}>
+              <strong>Edição {h.numero} de 3 · {fmtData(h.editado_em)} · {h.editado_por ?? "—"}</strong>
+              <span>Motivo: {h.motivo}</span>
+              <span>Observações: {h.observacoes}</span>
+              <small className="insp-sub">Km: {h.antes.km != null ? Number(h.antes.km).toLocaleString("pt-BR") : "—"} → {h.depois.km != null ? Number(h.depois.km).toLocaleString("pt-BR") : "—"} · Falhas: {h.antes.num_falhas} → {h.depois.num_falhas}</small>
+            </div>
+          ))}
+        </div>
+      )}
+      {!leitura && !editando && (
         <div className="insp-rodape">
           <span>{respondidos}/{itens.length} itens{pendencias.length > 0 && <small className="insp-sub"> · falta: {pendencias.join("; ")}</small>}</span>
           <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={salvar}>Salvar rascunho</button>
@@ -456,7 +512,7 @@ export default function InspecoesPage() {
                 <thead><tr><th>Data</th><th>Placa</th><th>Base</th><th>Executor</th><th>Km</th><th>Falhas</th><th>Status</th>{ehAdmin && <th></th>}</tr></thead>
                 <tbody>
                   {linhas.map((l) => (
-                    <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setAberto({ id: l.id, leitura: l.status === "Concluido" })}>
+                    <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setAberto({ id: l.id, leitura: false })}>
                       <td>{fmtData(l.data_hora)}</td><td><strong>{l.placa}</strong></td><td>{l.base}</td><td>{l.executor ?? "—"}</td>
                       <td>{l.km ? Number(l.km).toLocaleString("pt-BR") : "—"}{l.km_corrigido_em && <small className="insp-sub" title={"Corrigido por admin em " + fmtData(l.km_corrigido_em)}> (corrigido)</small>}</td>
                       <td>{l.status === "Concluido" ? (l.num_falhas > 0 ? <strong>{l.num_falhas}</strong> : "0") : "—"}</td>
