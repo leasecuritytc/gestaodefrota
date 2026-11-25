@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, mensagemErro } from "../api";
+import OperationalMap from "../components/OperationalMap";
 import { BarraEmpilhadaHorizontal, BarraVertical, LinhaEvolucao } from "../components/Charts";
 
 interface Relatorios {
@@ -47,6 +49,7 @@ const ORDEM_STATUS = ["Ativa", "Manutenção", "Desmobilizado", "Sem cooperado"]
 type Aba = "visao_geral" | "evolucao" | "relatorios";
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [evolucao, setEvolucao] = useState<PontoEvolucao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -145,6 +148,10 @@ export default function DashboardPage() {
 
           {aba === "visao_geral" && (
             <>
+              <OperationalMap
+                porBase={resumo.por_base}
+                onFiltrarBase={(codigo) => navigate(`/veiculos?base=${encodeURIComponent(codigo)}`)}
+              />
               <div className="grade-2col">
                 <div className="painel">
                   <h2>Veículos por base e status</h2>

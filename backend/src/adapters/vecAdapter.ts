@@ -11,7 +11,7 @@ import { campo, isVecConfigurado, linhasDe, texto, vecGet } from "./vecClient";
 
 const POR_PAGINA = 100;
 const MAX_PAGINAS_VEICULOS = 30; // até 3.000 veículos
-const MAX_PAGINAS_CHECKLIST = 5; // 500 inspeções mais recentes por rodada
+const MAX_PAGINAS_CHECKLIST = 20; // 2000 inspeções mais recentes (da frota toda) por rodada; depois filtra pelo escopo de bases
 
 const PLACA_RE = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
 
@@ -81,7 +81,13 @@ export async function syncVec(origem: "automatico" | "manual" = "manual"): Promi
   });
 
   try {
-    const veiculosVec = await buscarPaginas("moviles/newGrid", MAX_PAGINAS_VEICULOS, { showInactivos: "" });
+    const frotaCompleta = await buscarPaginas("moviles/newGrid", MAX_PAGINAS_VEICULOS, { showInactivos: "" });
+    // Escopo: só veículos cujo SVC é de uma das bases configuradas (VEC_BASES).
+    const basesEscopo = new Set(env.vec.bases);
+    const veiculosVec = frotaCompleta.filter((v) => {
+      const svc = texto(campo(v, ["unidad", "base_nombre", "svc", "base", "base.nombre"])) ?? "";
+      return basesEscopo.has(svc.split(" - ")[0].trim().toUpperCase());
+    });
     const checklistsVec = await buscarPaginas("formulario/newGrid", MAX_PAGINAS_CHECKLIST, {
       showInactivos: "false",
       idSort: "desc",
@@ -140,7 +146,11 @@ export async function syncVec(origem: "automatico" | "manual" = "manual"): Promi
 
       for (const l of checklistsVec) {
         const id = texto(campo(l, ["id"]));
-        const veic = veicPorId.get(texto(campo(l, ["movil_id"])) ?? "") ?? {};
+        const veic = veicPorId.get(texto(campo(l, ["movil_id"])) ?? "");
+        if (!veic) {
+          ignorados++; // checklist de veículo fora das bases do escopo
+          continue;
+        }
         const placa = normalizarPlaca(
           campo(l, ["dominio", "movil.dominio", "placa", "patente"]) ?? campo(veic, ["dominio", "placa"])
         );

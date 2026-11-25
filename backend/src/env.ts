@@ -33,6 +33,13 @@ export const env = {
     senha: process.env.VEC_SENHA ?? "",
     // Intervalo da sincronização automática, em minutos (0 = desligada).
     intervaloMin: Number(process.env.VEC_SYNC_INTERVALO_MIN ?? 120),
+    // Escopo atual: só as bases do administrador atual (códigos de SVC da
+    // VEC, ex.: "SMG3 - Pouso Alegre" → SMG3). Novos admins/bases entram
+    // aqui (ou em VEC_BASES no .env) quando forem credenciados.
+    bases: (process.env.VEC_BASES ?? "SMG3,SMG5,SMG9")
+      .split(",")
+      .map((b) => b.trim().toUpperCase())
+      .filter(Boolean),
   },
   bsc: {
     // Segredo que o coletor (computador do dono do acesso ao BSC) usa para

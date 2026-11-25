@@ -714,3 +714,12 @@ code.copiavel {
   outline: 2px solid var(--accent-forte);
   outline-offset: 1px;
 }
+
+/* Mapa operacional */
+.mapa-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.mapa-topo h2 { margin: 0; }
+.mapa-area { width: 100%; height: 420px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.mapa-aviso { color: var(--text); font-size: 13.5px; line-height: 1.5; }
+.mapa-aviso ul { margin: 8px 0 0; padding-left: 18px; }
+.mapa-aviso code.copiavel { display: inline-block; margin: 4px 0; }
+@media (max-width: 640px) { .mapa-area { height: 300px; } }

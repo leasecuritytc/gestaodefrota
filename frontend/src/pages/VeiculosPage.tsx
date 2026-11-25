@@ -76,7 +76,7 @@ export default function VeiculosPage() {
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
-  const [filtroBase, setFiltroBase] = useState("");
+  const [filtroBase, setFiltroBase] = useState(() => new URLSearchParams(window.location.search).get("base") ?? "");
   const [filtroStatus, setFiltroStatus] = useState("");
   const [editando, setEditando] = useState<Veiculo | null>(null);
   const [novoMotoristaId, setNovoMotoristaId] = useState<string>("");
