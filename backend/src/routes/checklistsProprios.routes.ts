@@ -35,7 +35,8 @@ checklistsProprioRouter.get("/veiculos", LEITURA, h(async (req, res) => {
   const r = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT v.id, v.placa, v.base, v.tipo, v.status, v.chassi, v.rentadora, v.transportadora,
-              u.ultimo_proprio, u.ultimo_km,
+              u.ultimo_proprio, u.ultimo_km, u.km_pos_ref,
+              kr.km AS km_ref, kr.definido_em AS km_ref_em, vv2.km AS km_vec, vv2.sincronizado_em AS km_vec_em,
               (SELECT max(e.data_hora) FROM checklist_events e WHERE e.placa = v.placa) AS ultimo_vec,
               (SELECT vv.estado FROM vec_veiculos vv WHERE vv.placa = v.placa) AS estado_vec,
               (u.ultimo_proprio IS NULL OR u.ultimo_proprio < now() - ($2 || ' days')::interval) AS vencido,
@@ -43,15 +44,28 @@ checklistsProprioRouter.get("/veiculos", LEITURA, h(async (req, res) => {
                  ORDER BY x.data_hora DESC LIMIT 1) AS rascunho_id
        FROM vehicles v
        LEFT JOIN LATERAL (
-         SELECT max(x.data_hora) AS ultimo_proprio, max(x.km) AS ultimo_km
-         FROM checklist_execucoes x WHERE x.vehicle_id = v.id AND x.status = 'Concluido'
+         SELECT max(x.data_hora) AS ultimo_proprio, max(x.km) AS ultimo_km,
+                max(x.km) FILTER (WHERE kr0.definido_em IS NULL OR coalesce(x.concluido_em, x.data_hora) > kr0.definido_em) AS km_pos_ref
+         FROM checklist_execucoes x
+         LEFT JOIN veiculo_km_referencia kr0 ON kr0.vehicle_id = x.vehicle_id
+         WHERE x.vehicle_id = v.id AND x.status = 'Concluido'
        ) u ON true
+       LEFT JOIN veiculo_km_referencia kr ON kr.vehicle_id = v.id
+       LEFT JOIN vec_veiculos vv2 ON vv2.placa = v.placa
        WHERE v.base = ANY($1) AND v.status <> 'Desmobilizado'
        ORDER BY v.base, v.placa`,
       [bases(), String(DIAS_VENCIMENTO)]
     )
   );
-  res.json(r.rows);
+  res.json(r.rows.map((x) => {
+    const cand: { valor: number; fonte: KmFonte }[] = [];
+    if (x.km_ref != null) cand.push({ valor: Number(x.km_ref), fonte: "referencia" });
+    if (x.km_pos_ref != null) cand.push({ valor: Number(x.km_pos_ref), fonte: "checklist" });
+    if (x.km_ref == null && x.km_vec != null) cand.push({ valor: Number(x.km_vec), fonte: "vec" });
+    const m = cand.length ? cand.reduce((a, b) => (b.valor > a.valor ? b : a)) : null;
+    const { km_pos_ref, km_ref, km_ref_em, km_vec, km_vec_em, ...resto } = x;
+    return { ...resto, km_minimo: m?.valor ?? null, km_fonte: m?.fonte ?? null, km_ref: km_ref != null ? Number(km_ref) : null, km_vec: km_vec != null ? Number(km_vec) : null };
+  }));
 }));
 
 const filtroSchema = z.object({
@@ -75,7 +89,7 @@ checklistsProprioRouter.get("/", LEITURA, h(async (req, res) => {
   if (f.status) { args.push(f.status); cond.push(`x.status = $${args.length}`); }
   const r = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
-      `SELECT x.id, v.placa, x.base, x.data_hora, x.km, x.status, x.num_falhas, x.ocorrencia_id,
+      `SELECT x.id, v.placa, x.base, x.data_hora, x.km, x.status, x.num_falhas, x.ocorrencia_id, x.km_corrigido_em,
               coalesce(u.full_name, u.email) AS executor
        FROM checklist_execucoes x
        JOIN vehicles v ON v.id = x.vehicle_id
@@ -92,7 +106,7 @@ checklistsProprioRouter.get("/", LEITURA, h(async (req, res) => {
 async function carregar(c: PoolClient, id: string) {
   const ex = await c.query(
     `SELECT x.id, x.vehicle_id, v.placa, x.base, x.data_hora, x.km, x.status, x.num_falhas, x.observacoes,
-            x.ocorrencia_id, coalesce(u.full_name, u.email) AS executor
+            x.ocorrencia_id, x.km_original, x.km_observacao, x.km_corrigido_em, coalesce(u.full_name, u.email) AS executor
      FROM checklist_execucoes x JOIN vehicles v ON v.id = x.vehicle_id LEFT JOIN users u ON u.id = x.executado_por
      WHERE x.id = $1`,
     [id]
@@ -100,8 +114,8 @@ async function carregar(c: PoolClient, id: string) {
   if (!ex.rows[0]) return null;
   const resp = await c.query(`SELECT item_id, resultado, observacao FROM checklist_respostas WHERE execucao_id = $1`, [id]);
   const fotos = await c.query(`SELECT id, item_id, tipo, mime, tamanho FROM checklist_fotos WHERE execucao_id = $1 ORDER BY created_at`, [id]);
-  const km_minimo = await kmMinimo(c, ex.rows[0].vehicle_id, id);
-  return { ...ex.rows[0], km_minimo, respostas: resp.rows, fotos: fotos.rows };
+  const kmInfo = await kmMinimoInfo(c, ex.rows[0].vehicle_id, id);
+  return { ...ex.rows[0], km_minimo: kmInfo?.valor ?? null, km_fonte: kmInfo?.fonte ?? null, km_fonte_data: kmInfo?.data ?? null, respostas: resp.rows, fotos: fotos.rows };
 }
 
 checklistsProprioRouter.get("/:id", LEITURA, h(async (req, res) => {
@@ -111,15 +125,42 @@ checklistsProprioRouter.get("/:id", LEITURA, h(async (req, res) => {
   res.json(out);
 }));
 
-// Maior km já lançado em checklist concluído do veículo (outro que não o próprio).
-async function kmMinimo(c: PoolClient, vehicleId: string, excluirId?: string): Promise<number | null> {
-  const r = await c.query(
-    `SELECT max(km) AS km FROM checklist_execucoes WHERE vehicle_id = $1 AND status = 'Concluido' AND ($2::uuid IS NULL OR id <> $2::uuid)`,
-    [vehicleId, excluirId ?? null]
-  );
-  return r.rows[0].km == null ? null : Number(r.rows[0].km);
+// Piso de quilometragem do veículo. Fontes, da mais forte para a mais fraca:
+//  1) km de referência definido por admin (vale sobre VEC e checklists anteriores a ele);
+//  2) maior km de checklist próprio concluído; 3) km da VEC (só leitura).
+// Sem referência, vale o maior entre checklist e VEC.
+type KmFonte = "referencia" | "checklist" | "vec";
+interface KmInfo { valor: number; fonte: KmFonte; data: string | null }
+
+async function kmMinimoInfo(c: PoolClient, vehicleId: string, excluirId?: string): Promise<KmInfo | null> {
+  const ref = (await c.query(`SELECT km, definido_em FROM veiculo_km_referencia WHERE vehicle_id = $1`, [vehicleId])).rows[0];
+  const chk = (await c.query(
+    `SELECT km, coalesce(concluido_em, data_hora) AS em FROM checklist_execucoes
+      WHERE vehicle_id = $1 AND status = 'Concluido' AND km IS NOT NULL
+        AND ($2::uuid IS NULL OR id <> $2::uuid)
+        AND ($3::timestamptz IS NULL OR coalesce(concluido_em, data_hora) > $3::timestamptz)
+      ORDER BY km DESC LIMIT 1`,
+    [vehicleId, excluirId ?? null, ref?.definido_em ?? null]
+  )).rows[0];
+  const cand: KmInfo[] = [];
+  if (ref) cand.push({ valor: Number(ref.km), fonte: "referencia", data: ref.definido_em });
+  if (chk) cand.push({ valor: Number(chk.km), fonte: "checklist", data: chk.em });
+  if (!ref) {
+    const vec = (await c.query(
+      `SELECT vv.km, vv.sincronizado_em FROM vec_veiculos vv JOIN vehicles v ON v.placa = vv.placa
+        WHERE v.id = $1 AND vv.km IS NOT NULL`, [vehicleId]
+    )).rows[0];
+    if (vec) cand.push({ valor: Number(vec.km), fonte: "vec", data: vec.sincronizado_em });
+  }
+  if (!cand.length) return null;
+  return cand.reduce((a, b) => (b.valor > a.valor ? b : a));
 }
-const msgKm = (min: number) => `Quilometragem menor que a já lançada anteriormente (${min.toLocaleString("pt-BR")} km). Confira o odômetro.`;
+
+const NOME_FONTE: Record<KmFonte, string> = { referencia: "km de referência definido pelo admin", checklist: "último checklist", vec: "VEC" };
+const msgKm = (i: KmInfo) =>
+  `Quilometragem menor que a já registrada (${i.valor.toLocaleString("pt-BR")} km — fonte: ${NOME_FONTE[i.fonte]}` +
+  `${i.data ? ` em ${new Date(i.data).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : ""}). ` +
+  `Confira o odômetro. Se o valor registrado estiver errado, peça a um admin para corrigir.`;
 
 const criarSchema = z.object({ vehicle_id: z.string().uuid(), km: z.coerce.number().min(0).max(5_000_000).optional() });
 
@@ -138,8 +179,8 @@ checklistsProprioRouter.post("/", ESCRITA, h(async (req, res) => {
     );
     if (existente.rows[0]) return { erro: 409, msg: "Já existe checklist deste veículo hoje.", existente_id: existente.rows[0].id };
     if (p.data.km != null) {
-      const min = await kmMinimo(c, veic.id);
-      if (min != null && p.data.km < min) return { erro: 400, msg: msgKm(min) };
+      const min = await kmMinimoInfo(c, veic.id);
+      if (min && p.data.km < min.valor) return { erro: 400, msg: msgKm(min) };
     }
     const ins = await c.query(
       `INSERT INTO checklist_execucoes (vehicle_id, base, executado_por, km) VALUES ($1, $2, $3, $4) RETURNING id`,
@@ -164,8 +205,8 @@ const salvarSchema = z.object({
 async function salvar(c: PoolClient, id: string, d: z.infer<typeof salvarSchema>): Promise<string | null> {
   if (d.km != null) {
     const v = await c.query(`SELECT vehicle_id FROM checklist_execucoes WHERE id = $1`, [id]);
-    const min = await kmMinimo(c, v.rows[0].vehicle_id, id);
-    if (min != null && d.km < min) return msgKm(min);
+    const min = await kmMinimoInfo(c, v.rows[0].vehicle_id, id);
+    if (min && d.km < min.valor) return msgKm(min);
   }
   await c.query(`UPDATE checklist_execucoes SET km = coalesce($2, km), observacoes = $3 WHERE id = $1`, [id, d.km ?? null, d.observacoes ?? null]);
   for (const r of d.respostas) {
@@ -222,8 +263,8 @@ checklistsProprioRouter.post("/:id/concluir", ESCRITA, h(async (req, res) => {
 
     const ex = (await c.query(`SELECT vehicle_id, km, data_hora FROM checklist_execucoes WHERE id = $1`, [id])).rows[0];
     if (ex.km == null) return { erro: 400, msg: "Informe a quilometragem." };
-    const min = await kmMinimo(c, ex.vehicle_id, id);
-    if (min != null && Number(ex.km) < min) return { erro: 400, msg: msgKm(min) };
+    const min = await kmMinimoInfo(c, ex.vehicle_id, id);
+    if (min && Number(ex.km) < min.valor) return { erro: 400, msg: msgKm(min) };
     const odo = await c.query(`SELECT count(*)::int AS n FROM checklist_fotos WHERE execucao_id = $1 AND tipo = 'odometro'`, [id]);
     if (odo.rows[0].n < 1) return { erro: 400, msg: "Anexe a foto do odômetro (painel mostrando a quilometragem) para concluir." };
 
@@ -245,6 +286,85 @@ checklistsProprioRouter.post("/:id/concluir", ESCRITA, h(async (req, res) => {
     );
     await registrarAuditoria(c, req.auth!.sub, "checklist_concluido", "checklist_execucoes", id, { falhas: falhas.length, criticas: criticas.length, ocorrencia_id: ocorrenciaId });
     return { ok: true, num_falhas: falhas.length, ocorrencia_id: ocorrenciaId };
+  });
+  if ("erro" in out) return res.status(out.erro as number).json({ error: out.msg });
+  res.json(out);
+}));
+
+// ===== Quilometragem: detalhe e correções (somente admin / superadmin) =====
+const ADMIN = requireRole("superadmin", "admin");
+const uuid = z.string().uuid();
+const refSchema = z.object({ km: z.coerce.number().min(0).max(5_000_000), observacao: z.string().trim().min(10, "Descreva o motivo (mín. 10 caracteres).").max(1000) });
+const corrSchema = refSchema;
+
+checklistsProprioRouter.get("/veiculos/:vid/km", LEITURA, h(async (req, res) => {
+  const vid = req.params.vid as string;
+  if (!uuid.safeParse(vid).success) return res.status(400).json({ error: "ID inválido." });
+  const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    const v = await c.query(`SELECT id, placa FROM vehicles WHERE id = $1`, [vid]);
+    if (!v.rows[0]) return null;
+    const info = await kmMinimoInfo(c, vid);
+    const ref = (await c.query(
+      `SELECT r.km, r.observacao, r.definido_em, u.full_name AS definido_por FROM veiculo_km_referencia r LEFT JOIN users u ON u.id = r.definido_por WHERE r.vehicle_id = $1`, [vid])).rows[0] ?? null;
+    const ult = (await c.query(
+      `SELECT id, km, coalesce(concluido_em, data_hora) AS em, km_original, km_observacao FROM checklist_execucoes
+        WHERE vehicle_id = $1 AND status = 'Concluido' AND km IS NOT NULL ORDER BY coalesce(concluido_em, data_hora) DESC LIMIT 1`, [vid])).rows[0] ?? null;
+    const vec = (await c.query(`SELECT km, sincronizado_em FROM vec_veiculos WHERE placa = $1`, [v.rows[0].placa])).rows[0] ?? null;
+    return { placa: v.rows[0].placa, minimo: info, referencia: ref, ultimo_checklist: ult, vec };
+  });
+  if (!out) return res.status(404).json({ error: "Veículo não encontrado." });
+  res.json(out);
+}));
+
+checklistsProprioRouter.put("/veiculos/:vid/km-referencia", ADMIN, h(async (req, res) => {
+  const vid = req.params.vid as string;
+  const p = refSchema.safeParse(req.body);
+  if (!uuid.safeParse(vid).success) return res.status(400).json({ error: "ID inválido." });
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message ?? "Dados inválidos." });
+  const ok = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    const v = await c.query(`SELECT id FROM vehicles WHERE id = $1`, [vid]);
+    if (!v.rows[0]) return false;
+    const antes = (await c.query(`SELECT km FROM veiculo_km_referencia WHERE vehicle_id = $1`, [vid])).rows[0];
+    await c.query(
+      `INSERT INTO veiculo_km_referencia (vehicle_id, km, observacao, definido_por, definido_em) VALUES ($1,$2,$3,$4, now())
+       ON CONFLICT (vehicle_id) DO UPDATE SET km = EXCLUDED.km, observacao = EXCLUDED.observacao, definido_por = EXCLUDED.definido_por, definido_em = now()`,
+      [vid, p.data.km, p.data.observacao, req.auth!.sub]
+    );
+    await registrarAuditoria(c, req.auth!.sub, "km_referencia_definido", "vehicles", vid, { km_anterior: antes ? Number(antes.km) : null, km_novo: p.data.km, observacao: p.data.observacao });
+    return true;
+  });
+  if (!ok) return res.status(404).json({ error: "Veículo não encontrado." });
+  res.json({ ok: true });
+}));
+
+checklistsProprioRouter.delete("/veiculos/:vid/km-referencia", ADMIN, h(async (req, res) => {
+  const vid = req.params.vid as string;
+  const obs = z.string().trim().min(5).max(1000).safeParse(req.body?.observacao);
+  if (!uuid.safeParse(vid).success) return res.status(400).json({ error: "ID inválido." });
+  if (!obs.success) return res.status(400).json({ error: "Informe o motivo da remoção (mín. 5 caracteres)." });
+  await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    const antes = (await c.query(`DELETE FROM veiculo_km_referencia WHERE vehicle_id = $1 RETURNING km`, [vid])).rows[0];
+    await registrarAuditoria(c, req.auth!.sub, "km_referencia_removido", "vehicles", vid, { km_removido: antes ? Number(antes.km) : null, observacao: obs.data });
+  });
+  res.json({ ok: true });
+}));
+
+// Corrige o km de um checklist JÁ concluído (o valor original fica guardado).
+checklistsProprioRouter.put("/:id/km-corrigir", ADMIN, h(async (req, res) => {
+  const id = req.params.id as string;
+  const p = corrSchema.safeParse(req.body);
+  if (!uuid.safeParse(id).success) return res.status(400).json({ error: "ID inválido." });
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message ?? "Dados inválidos." });
+  const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    const ex = (await c.query(`SELECT status, km, km_original FROM checklist_execucoes WHERE id = $1`, [id])).rows[0];
+    if (!ex) return { erro: 404, msg: "Checklist não encontrado." };
+    if (ex.status !== "Concluido") return { erro: 409, msg: "Só checklists concluídos precisam de correção; rascunhos podem ser editados direto." };
+    await c.query(
+      `UPDATE checklist_execucoes SET km_original = coalesce(km_original, km), km = $2, km_corrigido_por = $3, km_corrigido_em = now(), km_observacao = $4 WHERE id = $1`,
+      [id, p.data.km, req.auth!.sub, p.data.observacao]
+    );
+    await registrarAuditoria(c, req.auth!.sub, "km_checklist_corrigido", "checklist_execucoes", id, { km_anterior: ex.km != null ? Number(ex.km) : null, km_novo: p.data.km, observacao: p.data.observacao });
+    return { ok: true };
   });
   if ("erro" in out) return res.status(out.erro as number).json({ error: out.msg });
   res.json(out);

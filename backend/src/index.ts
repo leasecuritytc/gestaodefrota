@@ -15,6 +15,7 @@ import { basesRouter } from "./routes/bases.routes";
 import { bscRouter } from "./routes/bsc.routes";
 import { checklistsRouter } from "./routes/checklists.routes";
 import { checklistsProprioRouter } from "./routes/checklistsProprios.routes";
+import { pendenciasRouter } from "./routes/pendencias.routes";
 import { agendarSyncVec } from "./adapters/vecAdapter";
 
 const app = express();
@@ -38,6 +39,7 @@ app.use("/api/bases", basesRouter);
 app.use("/api/bsc", bscRouter);
 app.use("/api/checklists", checklistsRouter);
 app.use("/api/checklists-proprios", checklistsProprioRouter);
+app.use("/api/pendencias", pendenciasRouter);
 
 // Handler de erro central: nunca vaza stack trace nem detalhe de SQL ao cliente.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

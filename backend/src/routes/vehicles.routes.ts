@@ -11,7 +11,7 @@ vehiclesRouter.get("/", async (req, res) => {
   const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT v.id, v.placa, v.chassi, v.base, v.tipo, v.rentadora, v.transportadora,
-              v.subregiao, v.status, v.observacoes, v.motorista_atual_id,
+              v.subregiao, v.status, v.observacoes, v.motorista_atual_id, v.source, coalesce(v.ingested_at, v.created_at) AS cadastro_em,
               d.nome AS motorista_nome,
               vv.estado AS vec_estado, vv.km AS vec_km, vv.ultimo_bip AS vec_ultimo_bip,
               vv.sincronizado_em AS vec_sincronizado_em

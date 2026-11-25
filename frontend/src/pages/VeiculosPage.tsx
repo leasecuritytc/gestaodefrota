@@ -18,6 +18,9 @@ interface Veiculo {
   vec_estado: string | null;
   vec_km: string | null;
   vec_ultimo_bip: string | null;
+  vec_sincronizado_em: string | null;
+  source: string;
+  cadastro_em: string | null;
 }
 
 interface VeiculoVec {
@@ -64,6 +67,8 @@ function tagClasse(status: string) {
   return "tag tag-" + status.toLowerCase().replace(/\s+/g, "_").normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
+const NOME_ORIGEM: Record<string, string> = { manual: "Plataforma", planilha: "Planilha", planilha_google: "Planilha", legado_lovable: "Legado", vec: "VEC", bsc: "BSC" };
+
 const PAPEIS_QUE_TROCAM_MOTORISTA = ["superadmin", "admin", "gestor_base"];
 const STATUS_OPCOES = ["Ativa", "Manutenção", "Desmobilizado", "Sem cooperado"];
 
@@ -73,6 +78,7 @@ export default function VeiculosPage() {
   const podeEditar = !!usuario && (PAPEIS_ADMIN as readonly string[]).includes(usuario.role);
 
   const [veiculos, setVeiculos] = useState<Veiculo[] | null>(null);
+  const [alertas, setAlertas] = useState<Record<string, number>>({});
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
@@ -101,6 +107,11 @@ export default function VeiculosPage() {
       api.get<StatusVec>("/sync/vec/status").then((r) => setStatusVec(r.data)).catch(() => undefined);
     }
   }
+
+  useEffect(() => {
+    if (!podeEditar) return;
+    api.get<{ por_placa: Record<string, number> }>("/pendencias/resumo").then((r) => setAlertas(r.data.por_placa)).catch(() => undefined);
+  }, [podeEditar]);
 
   useEffect(carregarVec, [podeEditar]);
 
@@ -344,6 +355,10 @@ export default function VeiculosPage() {
                 <tr key={v.id}>
                   <td>
                     <strong>{v.placa}</strong>
+                    {podeEditar && alertas[v.placa] > 0 && (
+                      <a href={`/pendencias?placa=${v.placa}`} className="alerta-ico" title={`${alertas[v.placa]} pendência(s) de dados — clique para ver`} aria-label={`${alertas[v.placa]} pendência(s) de dados para ${v.placa}`}>⚠ {alertas[v.placa]}</a>
+                    )}
+                    <small className="origem-sel" title={`Cadastro de origem: ${NOME_ORIGEM[v.source] ?? v.source}${v.cadastro_em ? " em " + fmtData(v.cadastro_em) : ""}`}>{NOME_ORIGEM[v.source] ?? v.source}{v.cadastro_em ? ` · ${new Date(v.cadastro_em).toLocaleDateString("pt-BR")}` : ""}</small>
                   </td>
                   <td>{v.base}</td>
                   <td>
@@ -351,7 +366,7 @@ export default function VeiculosPage() {
                   </td>
                   <td>{v.rentadora ?? "—"}</td>
                   <td>{v.motorista_nome ?? "Sem cooperado"}</td>
-                  {podeEditar && <td>{v.vec_estado ? <span className={tagVec(v.vec_estado)}>{v.vec_estado}</span> : "—"}</td>}
+                  {podeEditar && <td>{v.vec_estado ? <><span className={tagVec(v.vec_estado)}>{v.vec_estado}</span><small className="origem-sel" title="Dado vindo da VEC (somente consulta)">VEC · {fmtData(v.vec_sincronizado_em)}</small></> : "—"}</td>}
                   {podeEditar && <td>{fmtKm(v.vec_km)}</td>}
                   {podeEditar && <td>{fmtData(v.vec_ultimo_bip)}</td>}
                   <td>{v.observacoes ?? "—"}</td>

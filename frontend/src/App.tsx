@@ -17,6 +17,7 @@ import MotoristasPage from "./pages/MotoristasPage";
 import ChecklistsPage from "./pages/ChecklistsPage";
 import InspecoesPage from "./pages/InspecoesPage";
 import BscPage from "./pages/BscPage";
+import PendenciasPage from "./pages/PendenciasPage";
 
 export default function App() {
   return (
@@ -79,6 +80,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="pendencias" element={<ProtectedRoute papeis={["superadmin", "admin"]}><PendenciasPage /></ProtectedRoute>} />
           <Route
             path="motoristas"
             element={

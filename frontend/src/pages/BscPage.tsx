@@ -55,7 +55,7 @@ export default function BscPage() {
           </div>
           {pagina && (
             <>
-              <p className="subtitulo">Coletado em {fmtData(pagina.coletado_em)}</p>
+              <p className="subtitulo"><span className="origem-sel" style={{ marginLeft: 0 }}>BSC · Looker Studio</span> Coletado em {fmtData(pagina.coletado_em)}</p>
               {pagina.numeros.length > 0 && (
                 <div className="bsc-grade">
                   {pagina.numeros.slice(0, 40).map((n, i) => (

@@ -1103,3 +1103,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .insp-kpis { grid-template-columns: 1fr 1fr; }
   .lateral { width: 84vw; }
 }
+
+/* Pendências de dados e marcadores de origem */
+.origem-sel { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .2px; background: rgba(120, 130, 160, .16); color: var(--text-muted, #8b93a7); white-space: nowrap; vertical-align: middle; }
+.origem-vec { background: rgba(59, 130, 246, .16); color: #60a5fa; }
+.origem-bsc { background: rgba(168, 85, 247, .16); color: #c084fc; }
+.origem-planilha { background: rgba(16, 185, 129, .16); color: #34d399; }
+.alerta-ico { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: rgba(245, 158, 11, .18); color: #f59e0b; font-size: 12px; font-weight: 700; text-decoration: none; }
+.nav-selo-alerta { background: #ef4444 !important; color: #fff !important; }
+.pend-lista { display: grid; gap: 10px; margin-top: 12px; }
+.pend { border: 1px solid var(--border); border-left: 4px solid #f59e0b; border-radius: 10px; padding: 12px 14px; }
+.pend-alta { border-left-color: #ef4444; }
+.pend-baixa { border-left-color: #64748b; }
+.pend-ok { opacity: .65; border-left-color: #10b981; }
+.pend header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.pend p { margin: 4px 0; }
+.pend-como { font-size: 13px; }

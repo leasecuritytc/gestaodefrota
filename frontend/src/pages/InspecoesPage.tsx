@@ -4,16 +4,17 @@ import { useAuth } from "../auth";
 
 type Resultado = "OK" | "FALHA" | "NA";
 interface Item { id: string; categoria: string; texto: string; critico: boolean; ordem: number }
-interface Veic { id: string; placa: string; base: string; tipo: string | null; status: string; chassi: string | null; rentadora: string | null; ultimo_km: string | null; ultimo_proprio: string | null; ultimo_vec: string | null; estado_vec: string | null; vencido: boolean; rascunho_id: string | null }
-interface Linha { id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; ocorrencia_id: string | null; executor: string | null }
+interface Veic { id: string; placa: string; base: string; tipo: string | null; status: string; chassi: string | null; rentadora: string | null; ultimo_km: string | null; km_minimo: number | null; km_fonte: "referencia" | "checklist" | "vec" | null; km_ref: number | null; km_vec: number | null; ultimo_proprio: string | null; ultimo_vec: string | null; estado_vec: string | null; vencido: boolean; rascunho_id: string | null }
+interface Linha { id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; ocorrencia_id: string | null; executor: string | null; km_corrigido_em: string | null }
 interface FotoMeta { id: string; item_id: string | null; tipo: "odometro" | "item" | "geral"; mime: string; tamanho: number }
-interface Detalhe { km_minimo: number | null; id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; observacoes: string | null; ocorrencia_id: string | null; executor: string | null; respostas: { item_id: string; resultado: Resultado; observacao: string | null }[]; fotos: FotoMeta[] }
+interface Detalhe { km_minimo: number | null; km_fonte: "referencia" | "checklist" | "vec" | null; km_original: string | null; km_observacao: string | null; km_corrigido_em: string | null; id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; observacoes: string | null; ocorrencia_id: string | null; executor: string | null; respostas: { item_id: string; resultado: Resultado; observacao: string | null }[]; fotos: FotoMeta[] }
 
 const fmtData = (v: string | null) => (v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
 const CIDADES: Record<string, string> = { SMG3: "Pouso Alegre/MG", SMG5: "Poços de Caldas/MG", SMG9: "Varginha/MG" };
 const diasDesde = (v: string | null) => (v ? Math.floor((Date.now() - new Date(v).getTime()) / 86400000) : null);
 const tagStatus = (s: string) => "tag tag-" + s.toLowerCase().replace(/\s+/g, "_").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 type Situacao = "todos" | "vencido" | "emdia" | "rascunho";
+const FONTE_KM = { referencia: "km de referência (admin)", checklist: "último checklist", vec: "VEC" } as const;
 const MAX_BYTES = 700 * 1024;
 
 // Reduz a foto escolhida no aparelho (lado maior 1280 px, JPEG) para caber no envio.
@@ -141,11 +142,12 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
       {msg && <div className={msg.tipo === "erro" ? "erro" : "sucesso"} role="status" aria-live="polite">{msg.texto}</div>}
       <div className="painel">
         <h2>Odômetro</h2>
-        <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Confira o número no painel do veículo e digite exatamente como aparece. A foto precisa mostrar a quilometragem legível. O km não pode ser menor que o já lançado, e depois de concluída a inspeção não dá para corrigir.</span></div>
+        <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Confira o número no painel do veículo e digite exatamente como aparece. A foto precisa mostrar a quilometragem legível. O km não pode ser menor que o já registrado. Depois de concluída a inspeção, só um admin pode corrigir o km.</span></div>
         <label className="insp-km">Quilometragem (km) *
           <input type="number" inputMode="numeric" min={det.km_minimo ?? 0} value={km} disabled={leitura} onChange={(e) => setKm(e.target.value)} aria-invalid={kmBaixo} />
         </label>
-        {det.km_minimo != null && <small className="insp-sub">Último km lançado: {det.km_minimo.toLocaleString("pt-BR")} km. Não é permitido informar valor menor.</small>}
+        {det.km_minimo != null && <small className="insp-sub">Km registrado: {det.km_minimo.toLocaleString("pt-BR")} km (fonte: {det.km_fonte ? FONTE_KM[det.km_fonte] : "—"}). Não é permitido informar valor menor.</small>}
+        {det.km_corrigido_em && <small className="insp-sub">Km corrigido por admin em {fmtData(det.km_corrigido_em)}{det.km_original ? ` (original: ${Number(det.km_original).toLocaleString("pt-BR")} km)` : ""}{det.km_observacao ? ` — “${det.km_observacao}”` : ""}.</small>}
         {kmBaixo && <div className="erro" role="alert" style={{ marginTop: 8 }}>Quilometragem menor que a já lançada ({det.km_minimo!.toLocaleString("pt-BR")} km). Confira o odômetro.</div>}
         <div className="insp-fotos" style={{ marginTop: 12 }}>
           <strong style={{ fontSize: 13 }}>Foto do odômetro (obrigatória) *</strong>
@@ -209,9 +211,86 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   );
 }
 
+function AjusteKm({ v, onFechar }: { v: Veic; onFechar: (salvou: boolean) => void }) {
+  const [d, setD] = useState<any>(null);
+  const [km, setKm] = useState("");
+  const [obs, setObs] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  useEffect(() => { api.get(`/checklists-proprios/veiculos/${v.id}/km`).then((r) => { setD(r.data); setKm(r.data.minimo ? String(r.data.minimo.valor) : ""); }).catch((e) => setMsg(mensagemErro(e, "Não foi possível carregar."))); }, [v.id]);
+  async function salvar() {
+    setMsg(null); setOcupado(true);
+    try { await api.put(`/checklists-proprios/veiculos/${v.id}/km-referencia`, { km: Number(km), observacao: obs }); onFechar(true); }
+    catch (e) { setMsg(mensagemErro(e, "Não foi possível salvar.")); } finally { setOcupado(false); }
+  }
+  async function remover() {
+    if (obs.trim().length < 5) { setMsg("Para remover a referência, escreva o motivo no campo de observação (mín. 5 caracteres)."); return; }
+    setMsg(null); setOcupado(true);
+    try { await api.delete(`/checklists-proprios/veiculos/${v.id}/km-referencia`, { data: { observacao: obs } }); onFechar(true); }
+    catch (e) { setMsg(mensagemErro(e, "Não foi possível remover.")); } finally { setOcupado(false); }
+  }
+  return (
+    <div className="modal-fundo" onClick={() => onFechar(false)}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Ajustar km de {v.placa}</h2>
+        {!d ? <p className="carregando">Carregando...</p> : (
+          <>
+            <ul className="insp-sub" style={{ paddingLeft: 18, margin: "0 0 10px" }}>
+              <li>Piso atual: <strong>{d.minimo ? `${Number(d.minimo.valor).toLocaleString("pt-BR")} km` : "sem registro"}</strong>{d.minimo ? ` (fonte: ${FONTE_KM[d.minimo.fonte as keyof typeof FONTE_KM]})` : ""}</li>
+              <li>Último checklist: {d.ultimo_checklist ? `${Number(d.ultimo_checklist.km).toLocaleString("pt-BR")} km em ${fmtData(d.ultimo_checklist.em)}` : "nenhum"}</li>
+              <li>VEC: {d.vec ? `${Number(d.vec.km).toLocaleString("pt-BR")} km (sincronizado em ${fmtData(d.vec.sincronizado_em)})` : "sem dado"}</li>
+              {d.referencia && <li>Referência do admin: {Number(d.referencia.km).toLocaleString("pt-BR")} km, por {d.referencia.definido_por ?? "—"} em {fmtData(d.referencia.definido_em)} — “{d.referencia.observacao}”</li>}
+            </ul>
+            <div className="insp-aviso" role="note"><strong>⚠ Use só se o registro estiver errado</strong><span>O km de referência passa a valer no lugar da VEC e dos checklists anteriores. Fica registrado na auditoria, com seu nome e a observação.</span></div>
+            {msg && <div className="erro" role="alert">{msg}</div>}
+            <div className="campo"><label>Km correto (conferido no odômetro)</label><input type="number" inputMode="numeric" min={0} value={km} onChange={(e) => setKm(e.target.value)} /></div>
+            <div className="campo"><label>Observação (mín. 10 caracteres)</label><textarea rows={3} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: Km da VEC veio errado; conferido no painel em 25/11." /></div>
+            <div className="acoes">
+              <button className="btn btn-secundario" onClick={() => onFechar(false)}>Cancelar</button>
+              {d.referencia && <button className="btn btn-secundario" disabled={ocupado} onClick={remover}>Remover referência</button>}
+              <button className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || km === "" || obs.trim().length < 10} onClick={salvar}>Salvar referência</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CorrigirKm({ l, onFechar }: { l: Linha; onFechar: (salvou: boolean) => void }) {
+  const [km, setKm] = useState(l.km ? String(Number(l.km)) : "");
+  const [obs, setObs] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  async function salvar() {
+    setMsg(null); setOcupado(true);
+    try { await api.put(`/checklists-proprios/${l.id}/km-corrigir`, { km: Number(km), observacao: obs }); onFechar(true); }
+    catch (e) { setMsg(mensagemErro(e, "Não foi possível corrigir.")); } finally { setOcupado(false); }
+  }
+  return (
+    <div className="modal-fundo" onClick={() => onFechar(false)}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Corrigir km do checklist de {l.placa}</h2>
+        <p className="subtitulo">Inspeção de {fmtData(l.data_hora)} · km atual {l.km ? Number(l.km).toLocaleString("pt-BR") : "—"}. O valor original fica guardado.</p>
+        {msg && <div className="erro" role="alert">{msg}</div>}
+        <div className="campo"><label>Km correto</label><input type="number" inputMode="numeric" min={0} value={km} onChange={(e) => setKm(e.target.value)} /></div>
+        <div className="campo"><label>Observação (mín. 10 caracteres)</label><textarea rows={3} value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex.: Digitado 150.000 em vez de 15.000; conferido na foto do odômetro." /></div>
+        <div className="acoes">
+          <button className="btn btn-secundario" onClick={() => onFechar(false)}>Cancelar</button>
+          <button className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || km === "" || obs.trim().length < 10} onClick={salvar}>Salvar correção</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function InspecoesPage() {
   const { usuario } = useAuth();
   const podeEscrever = !!usuario && ["superadmin", "admin", "gestor_base"].includes(usuario.role);
+  const ehAdmin = !!usuario && ["superadmin", "admin"].includes(usuario.role);
+  const [ajuste, setAjuste] = useState<Veic | null>(null);
+  const [corrigir, setCorrigir] = useState<Linha | null>(null);
   const [itens, setItens] = useState<Item[]>([]);
   const [veics, setVeics] = useState<Veic[]>([]);
   const [linhas, setLinhas] = useState<Linha[]>([]);
@@ -273,7 +352,7 @@ export default function InspecoesPage() {
 
   function pedirInspecao(v: Veic) {
     if (v.rascunho_id) { void iniciar(v, ""); return; }
-    setKmNovo(v.ultimo_km ? String(Number(v.ultimo_km)) : ""); setAlvo(v);
+    setKmNovo(v.km_minimo != null ? String(v.km_minimo) : ""); setAlvo(v);
   }
 
   const proximoVencido = veics.find((v) => v.vencido && (!fBase || v.base === fBase));
@@ -361,6 +440,7 @@ export default function InspecoesPage() {
                         <td className="insp-acoes">
                           {podeEscrever && <button className="btn btn-primario" style={{ width: "auto" }} onClick={() => pedirInspecao(v)}>{v.rascunho_id ? "Continuar" : "Inspecionar"}</button>}
                           <button className="btn btn-secundario" onClick={() => { setAba("historico"); setFBusca(v.placa); }}>Histórico</button>
+                          {ehAdmin && <button className="btn btn-secundario" onClick={() => setAjuste(v)} title="Corrigir ou definir o km de referência">Ajustar km</button>}
                         </td>
                       </tr>
                     );
@@ -373,14 +453,15 @@ export default function InspecoesPage() {
           linhas.length === 0 ? <p className="vazio">Nenhuma inspeção encontrada.</p> : (
             <div className="bsc-tabela-wrap">
               <table>
-                <thead><tr><th>Data</th><th>Placa</th><th>Base</th><th>Executor</th><th>Km</th><th>Falhas</th><th>Status</th></tr></thead>
+                <thead><tr><th>Data</th><th>Placa</th><th>Base</th><th>Executor</th><th>Km</th><th>Falhas</th><th>Status</th>{ehAdmin && <th></th>}</tr></thead>
                 <tbody>
                   {linhas.map((l) => (
                     <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setAberto({ id: l.id, leitura: l.status === "Concluido" })}>
                       <td>{fmtData(l.data_hora)}</td><td><strong>{l.placa}</strong></td><td>{l.base}</td><td>{l.executor ?? "—"}</td>
-                      <td>{l.km ? Number(l.km).toLocaleString("pt-BR") : "—"}</td>
+                      <td>{l.km ? Number(l.km).toLocaleString("pt-BR") : "—"}{l.km_corrigido_em && <small className="insp-sub" title={"Corrigido por admin em " + fmtData(l.km_corrigido_em)}> (corrigido)</small>}</td>
                       <td>{l.status === "Concluido" ? (l.num_falhas > 0 ? <strong>{l.num_falhas}</strong> : "0") : "—"}</td>
                       <td><span className={l.status === "Concluido" ? "tag tag-concluida" : "tag tag-em_andamento"}>{l.status === "Concluido" ? "Concluído" : "Rascunho"}</span></td>
+                      {ehAdmin && <td>{l.status === "Concluido" && <button className="btn btn-secundario" onClick={(e) => { e.stopPropagation(); setCorrigir(l); }}>Corrigir km</button>}</td>}
                     </tr>
                   ))}
                 </tbody>
@@ -396,13 +477,16 @@ export default function InspecoesPage() {
             <h2>Inspecionar {alvo.placa}</h2>
             <p className="subtitulo">{alvo.base} · {alvo.tipo ?? "Tipo não informado"}{alvo.rentadora ? ` · ${alvo.rentadora}` : ""}</p>
             <div className="insp-aviso" role="note"><strong>⚠ Atenção ao odômetro</strong><span>Digite exatamente o km do painel. Depois você precisará fotografar o odômetro.</span></div>
-            <div className="campo"><label>Quilometragem atual (km)</label><input type="number" inputMode="numeric" min={alvo.ultimo_km ? Number(alvo.ultimo_km) : 0} autoFocus value={kmNovo} onChange={(e) => setKmNovo(e.target.value)} />
-              {alvo.ultimo_km && <small className="insp-sub">Último km lançado: {Number(alvo.ultimo_km).toLocaleString("pt-BR")} km (não pode ser menor).</small>}
-              {kmNovo !== "" && alvo.ultimo_km && Number(kmNovo) < Number(alvo.ultimo_km) && <div className="erro" role="alert">Menor que o km já lançado.</div>}</div>
-            <div className="acoes"><button className="btn btn-secundario" onClick={() => setAlvo(null)}>Cancelar</button><button className="btn btn-primario" style={{ width: "auto" }} disabled={criando || (kmNovo !== "" && !!alvo.ultimo_km && Number(kmNovo) < Number(alvo.ultimo_km))} onClick={() => iniciar(alvo, kmNovo)}>Começar inspeção</button></div>
+            <div className="campo"><label>Quilometragem atual (km)</label><input type="number" inputMode="numeric" min={alvo.km_minimo ?? 0} autoFocus value={kmNovo} onChange={(e) => setKmNovo(e.target.value)} />
+              {alvo.km_minimo != null && <small className="insp-sub">Km registrado: {alvo.km_minimo.toLocaleString("pt-BR")} km (fonte: {alvo.km_fonte ? FONTE_KM[alvo.km_fonte] : "—"}). Não pode ser menor.</small>}
+              {kmNovo !== "" && alvo.km_minimo != null && Number(kmNovo) < alvo.km_minimo && <div className="erro" role="alert">Menor que o km já registrado.{ehAdmin ? " Se o registro estiver errado, use “Ajustar km”." : " Peça a um admin para corrigir o registro."}</div>}</div>
+            <div className="acoes"><button className="btn btn-secundario" onClick={() => setAlvo(null)}>Cancelar</button><button className="btn btn-primario" style={{ width: "auto" }} disabled={criando || (kmNovo !== "" && alvo.km_minimo != null && Number(kmNovo) < alvo.km_minimo)} onClick={() => iniciar(alvo, kmNovo)}>Começar inspeção</button></div>
           </div>
         </div>
       )}
+      {ajuste && <AjusteKm v={ajuste} onFechar={(salvou) => { setAjuste(null); if (salvou) void recarregar(); }} />}
+      {corrigir && <CorrigirKm l={corrigir} onFechar={(salvou) => { setCorrigir(null); if (salvou) void recarregar(); }} />}
     </div>
   );
 }
+

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { env } from "../env";
 import { withRole } from "../db";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { aplicarEscopo, normPlaca } from "../bscEscopo";
+import { aplicarEscopo, normPlaca, repararDeep } from "../bscEscopo";
 
 export const bscRouter = Router();
 
@@ -51,7 +51,7 @@ bscRouter.post("/ingest", async (req, res) => {
   const { pagina } = parsed.data;
   try {
     // Escopo: só as bases vinculadas. O que é de outras bases nem chega a ser gravado.
-    const { linhas, tabelas, numeros } = aplicarEscopo(parsed.data, await placasDoEscopo());
+    const { linhas, tabelas, numeros } = aplicarEscopo(repararDeep(parsed.data), await placasDoEscopo());
     const hash = createHash("sha256").update(JSON.stringify([linhas, tabelas])).digest("hex");
     const r = await withRole("superadmin", "", (c) =>
       c.query(
@@ -79,7 +79,7 @@ bscRouter.get("/", requireAuth, requireRole("superadmin", "admin"), async (req, 
   // Retratos antigos (gravados antes do escopo) também passam pelo filtro.
   const placas = await placasDoEscopo();
   const paginas = rows.rows
-    .map((p) => ({ ...p, ...aplicarEscopo({ linhas: p.linhas, tabelas: p.tabelas, numeros: p.numeros }, placas) }))
+    .map((p) => ({ ...p, ...aplicarEscopo(repararDeep({ linhas: p.linhas, tabelas: p.tabelas, numeros: p.numeros }), placas) }))
     .filter((p) => p.tabelas.length > 0);
   res.json({ configurado: Boolean(env.bsc.ingestToken), bases: env.vec.bases, paginas });
   } catch (err: any) {

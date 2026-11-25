@@ -20,3 +20,13 @@ feito por você uma vez e fica guardado em `./perfil` (não vai para o Git).
 - `Timeout` ao clicar na página: confira o nome exato no menu do relatório (`BSC_PAGINAS`).
 - `HTTP 401`: o token difere do `BSC_INGEST_TOKEN` do servidor. `HTTP 503`: servidor sem token.
 - Um arquivo `erro-*.png` é salvo quando uma página falha: mostra o que o navegador viu.
+
+## Coleta automática (Windows)
+
+Rode uma vez, na pasta `tools\bsc-coletor`, com o mesmo usuário do Windows que fez `npm run login`:
+
+```
+powershell -ExecutionPolicy Bypass -File .\agendar-coleta.ps1
+```
+
+Agenda de hora em hora das 07:00 às 18:00 e de 2 em 2 horas das 18:01 às 06:59. O computador precisa estar ligado e com você conectado. O resultado de cada coleta fica em `coleta.log`. Para remover: `... .\agendar-coleta.ps1 -Remover`.

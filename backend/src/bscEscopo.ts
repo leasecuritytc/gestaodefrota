@@ -68,3 +68,32 @@ export function aplicarEscopo(r: Retrato, placas: Set<string>): Retrato {
   if (omitidas) notas.push(`${omitidas} tabela(s) do relatório sem divisão por base/placa foram omitidas (são totais do fornecedor).`);
   return { linhas: notas, tabelas, numeros: [] };
 }
+
+// Conserta texto "quebrado" por troca de codificação (UTF-8 lido como Windows-1252):
+// "â€¦" -> "…", "Ã§" -> "ç", "Ã£" -> "ã" etc. Só mexe quando o resultado é UTF-8 válido.
+const CP1252: Record<string, number> = {
+  "€": 0x80, "‚": 0x82, "ƒ": 0x83, "„": 0x84, "…": 0x85, "†": 0x86, "‡": 0x87, "ˆ": 0x88, "‰": 0x89, "Š": 0x8a, "‹": 0x8b, "Œ": 0x8c,
+  "Ž": 0x8e, "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97, "˜": 0x98, "™": 0x99, "š": 0x9a, "›": 0x9b,
+  "œ": 0x9c, "ž": 0x9e, "Ÿ": 0x9f,
+};
+const SUSPEITO = /[ÃÂâ][\u0080-¿€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/;
+
+export function repararTexto(s: string): string {
+  if (!SUSPEITO.test(s)) return s;
+  const bytes: number[] = [];
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!;
+    if (cp < 256) bytes.push(cp);
+    else if (CP1252[ch] != null) bytes.push(CP1252[ch]);
+    else return s; // tem caractere fora do alcance: não é esse caso
+  }
+  const out = Buffer.from(bytes).toString("utf8");
+  return out.includes("�") ? s : out;
+}
+
+export function repararDeep<T>(v: T): T {
+  if (typeof v === "string") return repararTexto(v) as unknown as T;
+  if (Array.isArray(v)) return v.map((x) => repararDeep(x)) as unknown as T;
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, repararDeep(x)])) as T;
+  return v;
+}
