@@ -4,12 +4,16 @@ import { useAuth } from "../auth";
 
 type Resultado = "OK" | "FALHA" | "NA";
 interface Item { id: string; categoria: string; texto: string; critico: boolean; ordem: number }
-interface Veic { id: string; placa: string; base: string; tipo: string | null; ultimo_proprio: string | null; ultimo_vec: string | null; estado_vec: string | null; vencido: boolean; rascunho_id: string | null }
+interface Veic { id: string; placa: string; base: string; tipo: string | null; status: string; chassi: string | null; rentadora: string | null; ultimo_km: string | null; ultimo_proprio: string | null; ultimo_vec: string | null; estado_vec: string | null; vencido: boolean; rascunho_id: string | null }
 interface Linha { id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; ocorrencia_id: string | null; executor: string | null }
 interface FotoMeta { id: string; item_id: string | null; mime: string; tamanho: number }
 interface Detalhe { id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; observacoes: string | null; ocorrencia_id: string | null; executor: string | null; respostas: { item_id: string; resultado: Resultado; observacao: string | null }[]; fotos: FotoMeta[] }
 
 const fmtData = (v: string | null) => (v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
+const CIDADES: Record<string, string> = { SMG3: "Pouso Alegre/MG", SMG5: "Poços de Caldas/MG", SMG9: "Varginha/MG" };
+const diasDesde = (v: string | null) => (v ? Math.floor((Date.now() - new Date(v).getTime()) / 86400000) : null);
+const tagStatus = (s: string) => "tag tag-" + s.toLowerCase().replace(/\s+/g, "_").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+type Situacao = "todos" | "vencido" | "emdia" | "rascunho";
 const MAX_BYTES = 700 * 1024;
 
 // Reduz a foto escolhida no aparelho (lado maior 1280 px, JPEG) para caber no envio.
@@ -193,108 +197,186 @@ export default function InspecoesPage() {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [aberto, setAberto] = useState<{ id: string; leitura: boolean } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [aba, setAba] = useState<"veiculos" | "historico">("veiculos");
   const [fBase, setFBase] = useState("");
-  const [fPlaca, setFPlaca] = useState("");
-  const [fStatus, setFStatus] = useState("");
-  const [novo, setNovo] = useState(false);
-  const [vSel, setVSel] = useState("");
+  const [fBusca, setFBusca] = useState("");
+  const [fSit, setFSit] = useState<Situacao>("todos");
+  const [fHistStatus, setFHistStatus] = useState("");
+  const [alvo, setAlvo] = useState<Veic | null>(null);
   const [kmNovo, setKmNovo] = useState("");
+  const [criando, setCriando] = useState(false);
 
   const recarregar = useCallback(async () => {
     try {
       const [v, l] = await Promise.all([
         api.get<Veic[]>("/checklists-proprios/veiculos"),
-        api.get<Linha[]>("/checklists-proprios", { params: { base: fBase || undefined, placa: fPlaca || undefined, status: fStatus || undefined } }),
+        api.get<Linha[]>("/checklists-proprios", { params: { base: fBase || undefined, placa: aba === "historico" ? fBusca || undefined : undefined, status: fHistStatus || undefined } }),
       ]);
       setVeics(v.data); setLinhas(l.data); setErro(null);
-    } catch (e) { setErro(mensagemErro(e, "Não foi possível carregar os checklists.")); }
-  }, [fBase, fPlaca, fStatus]);
+    } catch (e) { setErro(mensagemErro(e, "Não foi possível carregar as inspeções.")); }
+  }, [fBase, fBusca, fHistStatus, aba]);
 
   useEffect(() => { api.get<Item[]>("/checklists-proprios/itens").then((r) => setItens(r.data)).catch((e) => setErro(mensagemErro(e))); }, []);
   useEffect(() => { const t = setTimeout(() => { void recarregar(); }, 250); return () => clearTimeout(t); }, [recarregar]);
 
+  const basesLista = useMemo(() => Array.from(new Set(veics.map((v) => v.base))).sort(), [veics]);
+  const resumo = useMemo(() => basesLista.map((b) => {
+    const lista = veics.filter((v) => v.base === b);
+    const venc = lista.filter((v) => v.vencido).length;
+    return { base: b, total: lista.length, vencidos: venc, emdia: lista.length - venc, rascunhos: lista.filter((v) => v.rascunho_id).length };
+  }), [veics, basesLista]);
+  const total = veics.length;
+  const totalVenc = veics.filter((v) => v.vencido).length;
+  const conformidade = total ? Math.round(((total - totalVenc) / total) * 100) : 0;
   const mes = new Date().toISOString().slice(0, 7);
   const kpiMes = linhas.filter((l) => l.status === "Concluido" && l.data_hora.slice(0, 7) === mes).length;
   const kpiFalha = linhas.filter((l) => l.status === "Concluido" && l.num_falhas > 0 && l.data_hora.slice(0, 7) === mes).length;
-  const kpiVenc = veics.filter((v) => v.vencido).length;
 
-  async function criar() {
-    setErro(null);
+  const visiveis = useMemo(() => veics.filter((v) =>
+    (!fBase || v.base === fBase) &&
+    (!fBusca || v.placa.toUpperCase().includes(fBusca.toUpperCase().replace(/[^A-Z0-9]/g, ""))) &&
+    (fSit === "todos" || (fSit === "vencido" && v.vencido) || (fSit === "emdia" && !v.vencido) || (fSit === "rascunho" && !!v.rascunho_id))
+  ), [veics, fBase, fBusca, fSit]);
+
+  async function iniciar(v: Veic, km: string) {
+    setErro(null); setCriando(true);
     try {
-      const r = await api.post("/checklists-proprios", { vehicle_id: vSel, km: kmNovo === "" ? undefined : Number(kmNovo) });
-      setNovo(false); setAberto({ id: r.data.id, leitura: false });
+      if (v.rascunho_id) { setAlvo(null); setAberto({ id: v.rascunho_id, leitura: false }); return; }
+      const r = await api.post("/checklists-proprios", { vehicle_id: v.id, km: km === "" ? undefined : Number(km) });
+      setAlvo(null); setAberto({ id: r.data.id, leitura: false });
     } catch (e: any) {
-      if (e?.response?.status === 409 && e.response.data?.existente_id) { setNovo(false); setAberto({ id: e.response.data.existente_id, leitura: false }); return; }
-      setErro(mensagemErro(e, "Não foi possível criar o checklist."));
-    }
+      if (e?.response?.status === 409 && e.response.data?.existente_id) { setAlvo(null); setAberto({ id: e.response.data.existente_id, leitura: false }); return; }
+      setErro(mensagemErro(e, "Não foi possível iniciar a inspeção."));
+      setAlvo(null);
+    } finally { setCriando(false); }
   }
+
+  function pedirInspecao(v: Veic) {
+    if (v.rascunho_id) { void iniciar(v, ""); return; }
+    setKmNovo(v.ultimo_km ? String(Number(v.ultimo_km)) : ""); setAlvo(v);
+  }
+
+  const proximoVencido = veics.find((v) => v.vencido && (!fBase || v.base === fBase));
 
   if (aberto) {
     return <Formulario id={aberto.id} itens={itens} somenteLeitura={aberto.leitura || !podeEscrever} onVoltar={() => { setAberto(null); void recarregar(); }} />;
   }
 
-  const bases = Array.from(new Set(veics.map((v) => v.base)));
   return (
     <div>
-      <h1>Inspeções (checklist próprio)</h1>
-      <p className="subtitulo">Inspeção quinzenal dos veículos das bases SMG3, SMG5 e SMG9. A VEC é só consulta: nada daqui é enviado a ela.</p>
-      {erro && <div className="erro">{erro}</div>}
-      <div className="bsc-grade">
-        <div className="bsc-numero"><small>Concluídos no mês</small><strong>{kpiMes}</strong></div>
-        <div className="bsc-numero"><small>Com falha no mês</small><strong>{kpiFalha}</strong></div>
-        <div className="bsc-numero"><small>Veículos vencidos (&gt; 15 dias)</small><strong>{kpiVenc}</strong></div>
-        <div className="bsc-numero"><small>Veículos no escopo</small><strong>{veics.length}</strong></div>
+      <div className="insp-topo">
+        <div>
+          <h1>Inspeções</h1>
+          <p className="subtitulo">Checklist quinzenal dos veículos de {basesLista.length ? basesLista.join(", ") : "SMG3, SMG5 e SMG9"}. A VEC é só consulta: nada daqui é enviado a ela.</p>
+        </div>
+        {podeEscrever && proximoVencido && (
+          <button className="btn btn-primario" style={{ width: "auto" }} onClick={() => pedirInspecao(proximoVencido)}>
+            Inspecionar próximo vencido{fBase ? ` (${fBase})` : ""}: {proximoVencido.placa}
+          </button>
+        )}
       </div>
+      {erro && <div className="erro">{erro}</div>}
+
+      <div className="insp-kpis">
+        <div className="insp-kpi"><small>Conformidade da frota</small><strong>{conformidade}%</strong>
+          <div className="kpi-barra"><span style={{ width: `${conformidade}%`, background: conformidade >= 80 ? "#10b981" : conformidade >= 50 ? "#f59e0b" : "#ef4444" }} /></div>
+          <em>{total - totalVenc} de {total} veículos em dia</em></div>
+        <div className="insp-kpi"><small>Vencidos (&gt; 15 dias)</small><strong style={{ color: totalVenc ? "var(--err-text, #ef4444)" : undefined }}>{totalVenc}</strong><em>precisam de inspeção</em></div>
+        <div className="insp-kpi"><small>Concluídas no mês</small><strong>{kpiMes}</strong><em>{kpiFalha} com falha</em></div>
+        <div className="insp-kpi"><small>Rascunhos abertos</small><strong>{veics.filter((v) => v.rascunho_id).length}</strong><em>inspeções em andamento</em></div>
+      </div>
+
+      <div className="insp-bases">
+        <button type="button" className={`insp-base${fBase === "" ? " ativa" : ""}`} onClick={() => setFBase("")}>
+          <span className="insp-base-cod">Todas</span><span className="insp-base-cid">Todas as bases</span>
+          <span className="insp-base-num">{total} veículos · <b>{totalVenc}</b> vencidos</span>
+        </button>
+        {resumo.map((b) => (
+          <button type="button" key={b.base} className={`insp-base${fBase === b.base ? " ativa" : ""}`} onClick={() => setFBase(fBase === b.base ? "" : b.base)}>
+            <span className="insp-base-cod">{b.base}</span><span className="insp-base-cid">{CIDADES[b.base] ?? ""}</span>
+            <span className="insp-base-num">{b.total} veículos · <b>{b.vencidos}</b> vencidos</span>
+            <div className="kpi-barra"><span style={{ width: `${b.total ? (b.emdia / b.total) * 100 : 0}%`, background: "#10b981" }} /></div>
+          </button>
+        ))}
+      </div>
+
+      <div className="abas">
+        <button className={aba === "veiculos" ? "ativo" : ""} onClick={() => setAba("veiculos")}>Veículos ({visiveis.length})</button>
+        <button className={aba === "historico" ? "ativo" : ""} onClick={() => setAba("historico")}>Histórico de inspeções</button>
+      </div>
+
       <div className="painel">
         <div className="barra-topo">
           <div className="filtros">
-            <select value={fBase} onChange={(e) => setFBase(e.target.value)} aria-label="Base"><option value="">Todas as bases</option>{bases.map((b) => <option key={b}>{b}</option>)}</select>
-            <input placeholder="Placa..." value={fPlaca} onChange={(e) => setFPlaca(e.target.value)} />
-            <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} aria-label="Status"><option value="">Todos</option><option value="Rascunho">Rascunho</option><option value="Concluido">Concluído</option></select>
-          </div>
-          {podeEscrever && <button className="btn btn-primario" style={{ width: "auto" }} onClick={() => { setNovo(true); setVSel(""); setKmNovo(""); }}>Novo checklist</button>}
-        </div>
-        {linhas.length === 0 ? <p className="vazio">Nenhum checklist ainda. Use "Novo checklist" para começar.</p> : (
-          <div className="bsc-tabela-wrap">
-            <table>
-              <thead><tr><th>Data</th><th>Placa</th><th>Base</th><th>Executor</th><th>Km</th><th>Falhas</th><th>Status</th></tr></thead>
-              <tbody>
-                {linhas.map((l) => (
-                  <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setAberto({ id: l.id, leitura: l.status === "Concluido" })}>
-                    <td>{fmtData(l.data_hora)}</td><td><strong>{l.placa}</strong></td><td>{l.base}</td><td>{l.executor ?? "—"}</td>
-                    <td>{l.km ? Number(l.km).toLocaleString("pt-BR") : "—"}</td>
-                    <td>{l.status === "Concluido" ? (l.num_falhas > 0 ? <strong>{l.num_falhas}</strong> : "0") : "—"}</td>
-                    <td><span className={l.status === "Concluido" ? "tag tag-concluida" : "tag tag-em_andamento"}>{l.status === "Concluido" ? "Concluído" : "Rascunho"}</span></td>
-                  </tr>
+            <input placeholder="Buscar placa…" value={fBusca} onChange={(e) => setFBusca(e.target.value)} aria-label="Buscar placa" />
+            {aba === "veiculos" ? (
+              <div className="insp-chips" role="group" aria-label="Situação">
+                {([["todos", "Todos"], ["vencido", "Vencidos"], ["emdia", "Em dia"], ["rascunho", "Rascunhos"]] as [Situacao, string][]).map(([k, r]) => (
+                  <button key={k} type="button" className={fSit === k ? "ativo" : ""} onClick={() => setFSit(k)}>{r}</button>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            ) : (
+              <select value={fHistStatus} onChange={(e) => setFHistStatus(e.target.value)} aria-label="Status"><option value="">Todos</option><option value="Rascunho">Rascunho</option><option value="Concluido">Concluído</option></select>
+            )}
           </div>
-        )}
-      </div>
-      <div className="painel">
-        <h2>Veículos vencidos</h2>
-        {veics.filter((v) => v.vencido).length === 0 ? <p className="vazio">Todos os veículos estão em dia.</p> : (
-          <div className="bsc-tabela-wrap">
-            <table>
-              <thead><tr><th>Placa</th><th>Base</th><th>Último checklist próprio</th><th>Último na VEC (consulta)</th></tr></thead>
-              <tbody>{veics.filter((v) => v.vencido).map((v) => <tr key={v.id}><td><strong>{v.placa}</strong></td><td>{v.base}</td><td>{v.ultimo_proprio ? fmtData(v.ultimo_proprio) : "Nunca"}</td><td>{fmtData(v.ultimo_vec)}</td></tr>)}</tbody>
-            </table>
-          </div>
-        )}
-      </div>
-      {novo && (
-        <div className="modal-fundo" onClick={() => setNovo(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Novo checklist</h2>
-            <div className="campo"><label>Veículo</label>
-              <select value={vSel} onChange={(e) => setVSel(e.target.value)}>
-                <option value="">Selecione…</option>
-                {veics.map((v) => <option key={v.id} value={v.id}>{v.placa} — {v.base}{v.rascunho_id ? " (rascunho)" : v.vencido ? " (vencido)" : ""}</option>)}
-              </select>
+        </div>
+
+        {aba === "veiculos" ? (
+          visiveis.length === 0 ? <p className="vazio">Nenhum veículo com esses filtros.</p> : (
+            <div className="bsc-tabela-wrap">
+              <table>
+                <thead><tr><th>Placa</th><th>Base</th><th>Tipo</th><th>Veículo</th><th>Último checklist</th><th>Última VEC (consulta)</th><th>Situação</th><th></th></tr></thead>
+                <tbody>
+                  {visiveis.map((v) => {
+                    const d = diasDesde(v.ultimo_proprio);
+                    return (
+                      <tr key={v.id}>
+                        <td><strong>{v.placa}</strong></td>
+                        <td>{v.base}</td>
+                        <td>{v.tipo ?? "—"}</td>
+                        <td><span className={tagStatus(v.status)}>{v.status}</span></td>
+                        <td>{v.ultimo_proprio ? <>{fmtData(v.ultimo_proprio)}<small className="insp-sub"> há {d} dia(s){v.ultimo_km ? ` · ${Number(v.ultimo_km).toLocaleString("pt-BR")} km` : ""}</small></> : <span className="insp-sub">Nunca inspecionado</span>}</td>
+                        <td>{fmtData(v.ultimo_vec)}</td>
+                        <td>{v.rascunho_id ? <span className="tag tag-em_andamento">Rascunho</span> : v.vencido ? <span className="tag tag-sem_cooperado">Vencido</span> : <span className="tag tag-ativa">Em dia</span>}</td>
+                        <td className="insp-acoes">
+                          {podeEscrever && <button className="btn btn-primario" style={{ width: "auto" }} onClick={() => pedirInspecao(v)}>{v.rascunho_id ? "Continuar" : "Inspecionar"}</button>}
+                          <button className="btn btn-secundario" onClick={() => { setAba("historico"); setFBusca(v.placa); }}>Histórico</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div className="campo"><label>Quilometragem atual (km)</label><input type="number" inputMode="numeric" min={0} value={kmNovo} onChange={(e) => setKmNovo(e.target.value)} /></div>
-            <div className="acoes"><button className="btn btn-secundario" onClick={() => setNovo(false)}>Cancelar</button><button className="btn btn-primario" style={{ width: "auto" }} disabled={!vSel} onClick={criar}>Começar</button></div>
+          )
+        ) : (
+          linhas.length === 0 ? <p className="vazio">Nenhuma inspeção encontrada.</p> : (
+            <div className="bsc-tabela-wrap">
+              <table>
+                <thead><tr><th>Data</th><th>Placa</th><th>Base</th><th>Executor</th><th>Km</th><th>Falhas</th><th>Status</th></tr></thead>
+                <tbody>
+                  {linhas.map((l) => (
+                    <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setAberto({ id: l.id, leitura: l.status === "Concluido" })}>
+                      <td>{fmtData(l.data_hora)}</td><td><strong>{l.placa}</strong></td><td>{l.base}</td><td>{l.executor ?? "—"}</td>
+                      <td>{l.km ? Number(l.km).toLocaleString("pt-BR") : "—"}</td>
+                      <td>{l.status === "Concluido" ? (l.num_falhas > 0 ? <strong>{l.num_falhas}</strong> : "0") : "—"}</td>
+                      <td><span className={l.status === "Concluido" ? "tag tag-concluida" : "tag tag-em_andamento"}>{l.status === "Concluido" ? "Concluído" : "Rascunho"}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+      </div>
+
+      {alvo && (
+        <div className="modal-fundo" onClick={() => setAlvo(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Inspecionar {alvo.placa}</h2>
+            <p className="subtitulo">{alvo.base} · {alvo.tipo ?? "Tipo não informado"}{alvo.rentadora ? ` · ${alvo.rentadora}` : ""}</p>
+            <div className="campo"><label>Quilometragem atual (km)</label><input type="number" inputMode="numeric" min={0} autoFocus value={kmNovo} onChange={(e) => setKmNovo(e.target.value)} /></div>
+            <div className="acoes"><button className="btn btn-secundario" onClick={() => setAlvo(null)}>Cancelar</button><button className="btn btn-primario" style={{ width: "auto" }} disabled={criando} onClick={() => iniciar(alvo, kmNovo)}>Começar inspeção</button></div>
           </div>
         </div>
       )}

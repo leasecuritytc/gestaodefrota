@@ -34,7 +34,7 @@ checklistsProprioRouter.get("/itens", LEITURA, h(async (req, res) => {
 checklistsProprioRouter.get("/veiculos", LEITURA, h(async (req, res) => {
   const r = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
-      `SELECT v.id, v.placa, v.base, v.tipo, v.status,
+      `SELECT v.id, v.placa, v.base, v.tipo, v.status, v.chassi, v.rentadora, v.transportadora,
               u.ultimo_proprio, u.ultimo_km,
               (SELECT max(e.data_hora) FROM checklist_events e WHERE e.placa = v.placa) AS ultimo_vec,
               (SELECT vv.estado FROM vec_veiculos vv WHERE vv.placa = v.placa) AS estado_vec,

@@ -808,3 +808,23 @@ code.copiavel {
 /* Modo escuro do mapa: inverte os tiles claros do OpenStreetMap (gratuito, sem chave). */
 .mapa-escuro .tile-osm { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.55); }
 .mapa-escuro.leaflet-container { background: #0b1117; }
+
+.insp-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.insp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 14px 0; }
+.insp-kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; backdrop-filter: var(--glass-blur); }
+.insp-kpi small { display: block; color: var(--muted); font-size: 12.5px; }
+.insp-kpi strong { display: block; font-size: 28px; font-variant-numeric: tabular-nums; margin: 2px 0; color: var(--ink); }
+.insp-kpi em { font-style: normal; font-size: 12px; color: var(--muted); }
+.insp-bases { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.insp-base { text-align: left; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; cursor: pointer; color: var(--text); font: inherit; display: flex; flex-direction: column; gap: 2px; transition: border-color .15s, transform .15s; }
+.insp-base:hover { border-color: #ff6b00; transform: translateY(-1px); }
+.insp-base.ativa { border-color: #ff6b00; box-shadow: 0 0 0 1px #ff6b00 inset; }
+.insp-base-cod { font-weight: 800; font-size: 18px; color: var(--ink); }
+.insp-base-cid { font-size: 12.5px; color: var(--muted); }
+.insp-base-num { font-size: 12.5px; margin-top: 6px; }
+.insp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.insp-chips button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.insp-chips button.ativo { background: #ff6b00; border-color: #ff6b00; color: #fff; font-weight: 700; }
+.insp-sub { color: var(--muted); font-size: 12px; }
+.insp-acoes { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+.insp-acoes .btn { padding: 6px 12px; font-size: 13px; }
