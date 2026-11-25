@@ -715,11 +715,22 @@ code.copiavel {
   outline-offset: 1px;
 }
 
-/* Mapa operacional */
-.mapa-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+/* Mapa operacional (Leaflet) */
+.mapa-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .mapa-topo h2 { margin: 0; }
-.mapa-area { width: 100%; height: 420px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
-.mapa-aviso { color: var(--text); font-size: 13.5px; line-height: 1.5; }
-.mapa-aviso ul { margin: 8px 0 0; padding-left: 18px; }
-.mapa-aviso code.copiavel { display: inline-block; margin: 4px 0; }
+.mapa-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.mapa-acoes select { padding: 7px 10px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); border-radius: 7px; font-size: 13px; }
+.mapa-area { width: 100%; height: 440px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); position: relative; z-index: 0; }
 @media (max-width: 640px) { .mapa-area { height: 300px; } }
+
+.pin-base-wrap { background: none; border: none; }
+.pin-base { position: relative; width: 40px; height: 40px; }
+.pin-base-ponto { position: absolute; left: 14px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: #ff6b00; border: 2px solid #fff; box-shadow: 0 0 6px rgba(255, 107, 0, 0.9); }
+.pin-base-anel { position: absolute; left: 8px; top: 8px; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #ff6b00; animation: pin-pulse 1.8s ease-out infinite; }
+.pin-base-rotulo { position: absolute; left: 50%; top: 32px; transform: translateX(-50%); background: #09090b; color: #fff; border: 1px solid #ff6b00; border-radius: 4px; padding: 0 5px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+@keyframes pin-pulse { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.8); opacity: 0; } }
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--modal-bg); color: var(--text); border: 1px solid var(--border); }
+.popup-base { font-size: 13px; line-height: 1.5; min-width: 180px; }
+.popup-base strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 14px; }
+.popup-base button { margin-top: 8px; background: #ff6b00; color: #fff; border: 0; border-radius: 6px; padding: 6px 12px; font-weight: 600; }
