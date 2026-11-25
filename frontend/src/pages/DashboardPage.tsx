@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, mensagemErro } from "../api";
 import OperationalMap from "../components/OperationalMap";
@@ -76,6 +76,12 @@ export default function DashboardPage() {
       .catch(() => setEvolucao([]));
   }, []);
 
+  const videoHero = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    // Respeita "reduzir movimento": mostra só o quadro final, sem animação.
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) videoHero.current?.pause();
+  }, []);
+
   const totalVeiculos = resumo?.por_status.reduce((acc, s) => acc + s.total, 0) ?? 0;
   const porStatusMapa = Object.fromEntries((resumo?.por_status ?? []).map((s) => [s.status, s.total]));
   const custoFormatado = resumo
@@ -96,6 +102,21 @@ export default function DashboardPage() {
         <div className="hero-painel-conteudo">
           <h1>Painel</h1>
           <p className="descricao-pagina">Visão geral da frota RodaCoop, atualizada em tempo real.</p>
+          <span className="hero-selo">
+            {totalVeiculos > 0 ? `${totalVeiculos} veículos · ` : ""}SMG3, SMG5, SMG9
+          </span>
+        </div>
+        <div className="hero-painel-midia" aria-hidden="true">
+          <video
+            ref={videoHero}
+            src="/hero-painel.mp4"
+            poster="/hero-painel-poster.jpg"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+          />
         </div>
       </div>
 

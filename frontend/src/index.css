@@ -465,6 +465,132 @@ textarea {
 }
 
 .hero-painel {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 210px;
+  background: #0b0d14; /* sempre escuro, nos dois temas */
+  border: 1px solid #27272a;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 22px;
+  box-shadow: 0 10px 30px rgba(11, 31, 58, 0.25);
+}
+
+.hero-painel-conteudo {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 40%;
+  min-width: 0;
+  padding: 26px 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #0b0d14;
+}
+
+.hero-painel-midia {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-painel-midia video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 78% 40%;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 35%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 35%);
+}
+
+.hero-painel h1 {
+  color: #fff;
+  margin: 0 0 4px;
+  font-size: 24px;
+  letter-spacing: 0.3px;
+}
+
+.hero-painel .descricao-pagina {
+  color: #b4b4bd;
+  margin-bottom: 0;
+}
+
+.hero-selo {
+  align-self: flex-start;
+  margin-top: 12px;
+  background: #ff6b00;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.abas {
+  display: inline-flex;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 4px;
+}
+
+.area-conteudo-fundo .abas button {
+  border-radius: 6px;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.area-conteudo-fundo .abas button.ativo {
+  background: var(--accent);
+  color: #fff;
+}
+
+.painel-integracao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-left: 4px solid var(--accent);
+}
+
+.painel-integracao h2 {
+  margin-bottom: 4px;
+}
+
+.area-conteudo-fundo .abas {
+  margin-bottom: 14px;
+}
+
+.barra-disp {
+  position: relative;
+  background: var(--surface-2);
+  border-radius: 999px;
+  height: 18px;
+  min-width: 110px;
+  overflow: hidden;
+}
+
+.barra-disp-preenchida {
+  background: var(--success);
+  height: 100%;
+}
+
+.barra-disp span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.hero-painel {
   background:
     linear-gradient(180deg, rgba(11, 31, 58, 0.55), rgba(11, 31, 58, 0.92)),
     url("/fundo-rodacoop.jpg") center 25%/cover no-repeat;
@@ -957,7 +1083,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
 @media (max-width: 900px) {
   .conteudo { padding: 16px 12px 24px; }
   .conteudo h1 { font-size: 20px; }
-  .hero-painel { padding: 16px; }
+  .hero-painel { flex-direction: column; min-height: 0; }
+  .hero-painel-conteudo { flex: none; padding: 16px; }
+  .hero-painel-midia { flex: none; height: 180px; }
+  .hero-painel-midia video { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 30%); mask-image: linear-gradient(180deg, transparent 0, #000 30%); object-position: 70% 35%; }
   /* Tabelas rolam na horizontal dentro do próprio cartão, sem alargar a página */
   .conteudo table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
   .painel { padding: 14px 12px; overflow-x: hidden; }
