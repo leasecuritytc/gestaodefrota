@@ -241,7 +241,7 @@ export default function DashboardPage() {
                         <p className="vazio">Sem custos lançados no período.</p>
                       ) : (
                         <BarraVertical
-                          cor="#0b1f3a"
+                          cor="#71717a"
                           dados={relatorios.custo_por_mes.map((m) => ({
                             rotulo: m.mes.split("-").reverse().join("/"),
                             valor: Math.round(Number(m.custo)),
@@ -258,7 +258,7 @@ export default function DashboardPage() {
                         <p className="vazio">Nenhuma ocorrência registrada.</p>
                       ) : (
                         <BarraVertical
-                          cor="#c0392b"
+                          cor="#ef4444"
                           dados={relatorios.ocorrencias_por_tipo.map((o) => ({
                             rotulo: NOMES_OCORRENCIA[o.tipo] ?? o.tipo,
                             valor: o.total,
@@ -272,7 +272,7 @@ export default function DashboardPage() {
                         <p className="vazio">Nenhuma ocorrência registrada.</p>
                       ) : (
                         <BarraVertical
-                          cor="#1e8e5a"
+                          cor="#10b981"
                           dados={relatorios.ocorrencias_por_status.map((o) => ({ rotulo: o.status, valor: o.total }))}
                         />
                       )}

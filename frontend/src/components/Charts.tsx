@@ -3,10 +3,10 @@
 // componente próprio e leve evita inflar o bundle e o lockfile).
 
 const CORES_STATUS: Record<string, string> = {
-  Ativa: "#1e8e5a",
-  "Manutenção": "#e08a1e",
-  Desmobilizado: "#8a93a6",
-  "Sem cooperado": "#c0392b",
+  Ativa: "#10b981",
+  "Manutenção": "#f59e0b",
+  Desmobilizado: "#64748b",
+  "Sem cooperado": "#ef4444",
 };
 const COR_PADRAO = "#2563eb";
 
@@ -70,7 +70,7 @@ export function BarraEmpilhadaHorizontal({
           const total = Object.values(d.series).reduce((a, b) => a + b, 0);
           return (
             <div key={d.grupo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 64, fontSize: 12, fontWeight: 700, color: "var(--navy)", flexShrink: 0 }}>
+              <div style={{ width: 64, fontSize: 12, fontWeight: 700, color: "var(--ink)", flexShrink: 0 }}>
                 {d.grupo}
               </div>
               <svg
@@ -81,9 +81,9 @@ export function BarraEmpilhadaHorizontal({
                 role="img"
                 aria-label={`${d.grupo}: ${total} veículos`}
               >
-                <rect x={0} y={0} width={largura} height={altura} rx={4} fill="#eef1f8" />
+                <rect x={0} y={0} width={largura} height={altura} rx={4} fill="var(--surface-2)" />
                 {marcas.slice(1).map((m) => (
-                  <line key={m} x1={m * largura} y1={0} x2={m * largura} y2={altura} stroke="#dfe4f0" strokeWidth={0.5} />
+                  <line key={m} x1={m * largura} y1={0} x2={m * largura} y2={altura} stroke="var(--grid)" strokeWidth={0.5} />
                 ))}
                 {(() => {
                   let x = 0;
@@ -130,7 +130,7 @@ interface BarraVerticalProps {
 
 // Barras horizontais com eixo (ex.: veículos por tipo) — mesmo formato do
 // painel de referência (rótulo à esquerda, barra, eixo numérico embaixo).
-export function BarraVertical({ dados, cor = "#e08a1e" }: BarraVerticalProps) {
+export function BarraVertical({ dados, cor = "#ff6b00" }: BarraVerticalProps) {
   const max = Math.max(1, ...dados.map((d) => d.valor));
   const eixoMax = tetoEixo(max);
   const marcas = [0, 0.25, 0.5, 0.75, 1];
@@ -140,13 +140,13 @@ export function BarraVertical({ dados, cor = "#e08a1e" }: BarraVerticalProps) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {dados.map((d) => (
           <div key={d.rotulo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 78, fontSize: 12, fontWeight: 700, color: "var(--navy)", flexShrink: 0, textAlign: "right" }}>
+            <div style={{ width: 78, fontSize: 12, fontWeight: 700, color: "var(--ink)", flexShrink: 0, textAlign: "right" }}>
               {d.rotulo}
             </div>
             <svg viewBox="0 0 100 22" width="100%" height={22} preserveAspectRatio="none" role="img" aria-label={`${d.rotulo}: ${d.valor}`}>
-              <rect x={0} y={0} width={100} height={22} rx={4} fill="#eef1f8" />
+              <rect x={0} y={0} width={100} height={22} rx={4} fill="var(--surface-2)" />
               {marcas.slice(1).map((m) => (
-                <line key={m} x1={m * 100} y1={0} x2={m * 100} y2={22} stroke="#dfe4f0" strokeWidth={0.5} />
+                <line key={m} x1={m * 100} y1={0} x2={m * 100} y2={22} stroke="var(--grid)" strokeWidth={0.5} />
               ))}
               <rect x={0} y={0} width={(d.valor / eixoMax) * 100} height={22} rx={4} fill={cor} />
             </svg>
@@ -174,7 +174,7 @@ interface LinhaEvolucaoProps {
 }
 
 // Linha de evolução (série temporal) com área preenchida suave.
-export function LinhaEvolucao({ pontos, cor = "#e08a1e", altura = 160 }: LinhaEvolucaoProps) {
+export function LinhaEvolucao({ pontos, cor = "#ff6b00", altura = 160 }: LinhaEvolucaoProps) {
   if (pontos.length === 0) return <p className="vazio">Sem snapshots suficientes ainda.</p>;
   const largura = 560;
   const padding = 28;

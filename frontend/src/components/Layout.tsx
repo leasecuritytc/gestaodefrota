@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { useTema } from "../theme";
 
 const ITENS_MENU: { to: string; label: string; papeis?: string[] }[] = [
   { to: "/", label: "Painel" },
@@ -29,6 +30,7 @@ export default function Layout() {
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { tema, definirTema } = useTema();
   const noPainel = location.pathname === "/";
 
   function sair() {
@@ -63,6 +65,24 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className="tema-seletor" role="group" aria-label="Tema da interface">
+          <button
+            type="button"
+            className={tema === "dark" ? "ativo" : ""}
+            aria-pressed={tema === "dark"}
+            onClick={() => definirTema("dark")}
+          >
+            🌙 Modo Escuro
+          </button>
+          <button
+            type="button"
+            className={tema === "light" ? "ativo" : ""}
+            aria-pressed={tema === "light"}
+            onClick={() => definirTema("light")}
+          >
+            ☀️ Modo Claro
+          </button>
+        </div>
         <div className="navbar-usuario">
           <div className="navbar-usuario-nome">{usuario?.full_name ?? usuario?.email}</div>
           <div className="navbar-usuario-papel">{usuario ? NOMES_PAPEL[usuario.role] ?? usuario.role : ""}</div>

@@ -469,7 +469,7 @@ export default function VeiculosPage() {
               <label>Observações</label>
               <textarea
                 rows={3}
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid #d3d9e6", borderRadius: 8, fontFamily: "inherit" }}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--input-border)", background: "var(--input-bg)", color: "var(--text)", borderRadius: 8, fontFamily: "inherit" }}
                 value={formDados.observacoes ?? ""}
                 onChange={(e) => setFormDados((f) => ({ ...f, observacoes: e.target.value }))}
               />
