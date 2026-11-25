@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, mensagemErro } from "../api";
 
-type Tipo = "mensal" | "bimestral" | "semestral" | "anual";
+type Tipo = "semanal" | "quinzenal" | "personalizado" | "mensal" | "bimestral" | "semestral" | "anual";
 interface Rel { id: string; tipo: Tipo; periodo_inicio: string; periodo_fim: string; titulo: string; gerado_em: string; autor_nome: string; link_ativo: boolean; link_expira_em: string | null }
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -14,6 +14,11 @@ export default function RelatoriosPage() {
   const [tipo, setTipo] = useState<Tipo>("mensal");
   const [ano, setAno] = useState(hoje.getFullYear());
   const [periodo, setPeriodo] = useState(hoje.getMonth() + 1);
+  const iso = hoje.toISOString().slice(0, 10);
+  const [dataSem, setDataSem] = useState(iso);
+  const [quinzena, setQuinzena] = useState(hoje.getDate() <= 15 ? 1 : 2);
+  const [de, setDe] = useState(new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10));
+  const [ate, setAte] = useState(iso);
   const [msg, setMsg] = useState<{ tipo: "erro" | "sucesso"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [link, setLink] = useState<{ rel: Rel; url: string | null; expira: string | null; dias: number } | null>(null);
@@ -28,17 +33,17 @@ export default function RelatoriosPage() {
   useEffect(() => { void carregar(); }, [carregar]);
 
   const opcoes = useMemo(() => {
-    if (tipo === "mensal") return MESES.map((m, i) => ({ v: i + 1, t: m }));
+    if (tipo === "mensal" || tipo === "quinzenal") return MESES.map((m, i) => ({ v: i + 1, t: m }));
     if (tipo === "bimestral") return [1, 2, 3, 4, 5, 6].map((b) => ({ v: b, t: `${b}º bimestre (${MESES[b * 2 - 2].slice(0, 3)}–${MESES[b * 2 - 1].slice(0, 3)})` }));
     if (tipo === "semestral") return [{ v: 1, t: "1º semestre (jan–jun)" }, { v: 2, t: "2º semestre (jul–dez)" }];
     return [];
   }, [tipo]);
-  useEffect(() => { setPeriodo(tipo === "mensal" ? hoje.getMonth() + 1 : 1); }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPeriodo(tipo === "mensal" || tipo === "quinzenal" ? hoje.getMonth() + 1 : 1); }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function gerar() {
     setMsg(null); setOcupado(true);
     try {
-      const r = await api.post<{ id: string; titulo: string }>("/relatorios", { tipo, ano, periodo: tipo === "anual" ? undefined : periodo });
+      const r = await api.post<{ id: string; titulo: string }>("/relatorios", { tipo, ano, periodo: ["anual", "semanal", "personalizado"].includes(tipo) ? undefined : periodo, data: tipo === "semanal" ? dataSem : undefined, quinzena: tipo === "quinzenal" ? quinzena : undefined, de: tipo === "personalizado" ? de : undefined, ate: tipo === "personalizado" ? ate : undefined });
       await carregar();
       setMsg({ tipo: "sucesso", texto: `${r.data.titulo} gerado. Use “Abrir PDF” na lista abaixo.` });
     } catch (e: any) {
@@ -81,7 +86,7 @@ export default function RelatoriosPage() {
   return (
     <div>
       <h1>Relatórios</h1>
-      <p className="descricao-pagina">Gere relatórios mensais, bimestrais, semestrais ou anuais em PDF para apresentar em reunião, e compartilhe por link. Visível apenas para superadmin e admin.</p>
+      <p className="descricao-pagina">Gere relatórios semanais, quinzenais, mensais, bimestrais, semestrais, anuais ou entre datas em PDF para apresentar em reunião, e compartilhe por link. Visível apenas para superadmin e admin.</p>
       {msg && <div className={msg.tipo === "erro" ? "erro" : "sucesso"} role="status" aria-live="polite">{msg.texto}</div>}
 
       {perfilFalta.length > 0 && (
@@ -96,13 +101,17 @@ export default function RelatoriosPage() {
         <div className="filtros">
           <label className="insp-sub">Tipo
             <select value={tipo} onChange={(e) => setTipo(e.target.value as Tipo)}>
-              <option value="mensal">Mensal</option><option value="bimestral">Bimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option>
+              <option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="mensal">Mensal</option><option value="bimestral">Bimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option><option value="personalizado">Entre datas</option>
             </select>
           </label>
+          {tipo === "semanal" && <label className="insp-sub">Qualquer dia da semana<input type="date" value={dataSem} onChange={(e) => setDataSem(e.target.value)} /></label>}
+          {tipo === "personalizado" && <><label className="insp-sub">De<input type="date" value={de} onChange={(e) => setDe(e.target.value)} /></label><label className="insp-sub">Até<input type="date" value={ate} onChange={(e) => setAte(e.target.value)} /></label></>}
+          {tipo !== "semanal" && tipo !== "personalizado" && (
           <label className="insp-sub">Ano
             <select value={ano} onChange={(e) => setAno(Number(e.target.value))}>{anos.map((a) => <option key={a} value={a}>{a}</option>)}</select>
-          </label>
-          {tipo !== "anual" && (
+          </label>)}
+          {tipo === "quinzenal" && <label className="insp-sub">Quinzena<select value={quinzena} onChange={(e) => setQuinzena(Number(e.target.value))}><option value={1}>1ª (dia 1 a 15)</option><option value={2}>2ª (dia 16 ao fim)</option></select></label>}
+          {tipo !== "anual" && tipo !== "semanal" && tipo !== "personalizado" && (
             <label className="insp-sub">Período
               <select value={periodo} onChange={(e) => setPeriodo(Number(e.target.value))}>{opcoes.map((o) => <option key={o.v} value={o.v}>{o.t}</option>)}</select>
             </label>

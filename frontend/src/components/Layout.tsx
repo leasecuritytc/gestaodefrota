@@ -40,7 +40,7 @@ const GESTAO: Item[] = [
   { to: "/bases", label: "Bases", icone: "bases", papeis: ["superadmin", "admin"] },
   { to: "/motoristas", label: "Motoristas", icone: "motoristas", papeis: ["superadmin", "admin"] },
   { to: "/usuarios", label: "Usuários", icone: "usuarios", papeis: ["superadmin", "admin"] },
-  { to: "/auditoria", label: "Auditoria", icone: "auditoria", papeis: ["superadmin", "admin"] },
+  { to: "/auditoria", label: "Auditoria", icone: "auditoria", papeis: ["superadmin"] },
 ];
 
 const NOMES_PAPEL: Record<string, string> = {

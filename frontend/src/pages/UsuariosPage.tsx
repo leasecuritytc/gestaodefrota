@@ -88,14 +88,7 @@ export default function UsuariosPage() {
     }
   }
 
-  async function alternarAcessoAuditoria(id: string, atual: boolean) {
-    try {
-      await api.patch(`/users/${id}/acesso-auditoria`, { acesso_auditoria: !atual });
-      carregar();
-    } catch (err) {
-      setErro(mensagemErro(err, "Não foi possível alterar o acesso à auditoria."));
-    }
-  }
+
 
   async function alternarAtivo(id: string, atual: boolean) {
     try {
@@ -185,7 +178,6 @@ export default function UsuariosPage() {
                 <th>E-mail</th>
                 <th>Papel</th>
                 <th>Status</th>
-                {usuario?.role === "superadmin" && <th>Auditoria</th>}
                 <th></th>
               </tr>
             </thead>
@@ -201,20 +193,6 @@ export default function UsuariosPage() {
                     </span>
                     {!u.active && <span className="tag tag-inativo" style={{ marginLeft: 4 }}>Desativado</span>}
                   </td>
-                  {usuario?.role === "superadmin" && (
-                    <td>
-                      {u.role === "admin" ? (
-                        <button
-                          className="btn btn-secundario"
-                          onClick={() => alternarAcessoAuditoria(u.id, u.acesso_auditoria)}
-                        >
-                          {u.acesso_auditoria ? "Revogar" : "Conceder"}
-                        </button>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  )}
                   <td style={{ display: "flex", gap: 6 }}>
                     {!u.ativado_em && (
                       <button className="btn btn-secundario" onClick={() => reenviarConvite(u.id)}>

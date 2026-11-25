@@ -15,15 +15,44 @@ const NOMES_MES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "
 const dia = (a: number, m: number, d: number) => `${a}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 const ultimoDia = (a: number, m: number) => new Date(Date.UTC(a, m, 0)).getUTCDate();
 
+const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const gerarSchema = z.object({
-  tipo: z.enum(["mensal", "bimestral", "semestral", "anual"]),
-  ano: z.coerce.number().int().min(2024).max(2100),
+  tipo: z.enum(["semanal", "quinzenal", "mensal", "bimestral", "semestral", "anual", "personalizado"]),
+  ano: z.coerce.number().int().min(2024).max(2100).optional(),
   periodo: z.coerce.number().int().min(1).max(12).optional(), // mês (1-12), bimestre (1-6) ou semestre (1-2)
+  data: data.optional(),                                      // semanal: qualquer dia da semana desejada
+  quinzena: z.coerce.number().int().min(1).max(2).optional(), // quinzenal: 1ª (1–15) ou 2ª (16–fim)
+  de: data.optional(), ate: data.optional(),                  // personalizado
 });
+type GerarIn = z.infer<typeof gerarSchema>;
 
-export function calcularPeriodo(tipo: string, ano: number, periodo?: number): { ini: string; fim: string; titulo: string } | string {
+const fmtBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+const isoDe = (d: Date) => d.toISOString().slice(0, 10);
+
+export function calcularPeriodo(g: GerarIn): { ini: string; fim: string; titulo: string } | string {
+  const { tipo, ano, periodo } = g;
+  if (tipo === "personalizado") {
+    if (!g.de || !g.ate) return "Informe a data inicial e a final.";
+    if (g.de > g.ate) return "A data inicial não pode ser depois da final.";
+    if ((Date.parse(g.ate) - Date.parse(g.de)) / 86_400_000 > 366) return "O período personalizado pode ter no máximo 366 dias.";
+    return { ini: g.de, fim: g.ate, titulo: `Relatório de ${fmtBR(g.de)} a ${fmtBR(g.ate)}` };
+  }
+  if (tipo === "semanal") {
+    if (!g.data) return "Escolha uma data da semana.";
+    const d = new Date(g.data + "T00:00:00Z");
+    const dow = (d.getUTCDay() + 6) % 7; // segunda = 0
+    const seg = new Date(d.getTime() - dow * 86_400_000), dom = new Date(seg.getTime() + 6 * 86_400_000);
+    return { ini: isoDe(seg), fim: isoDe(dom), titulo: `Relatório semanal — ${fmtBR(isoDe(seg))} a ${fmtBR(isoDe(dom))}` };
+  }
+  if (!ano) return "Informe o ano.";
   if (tipo === "anual") return { ini: dia(ano, 1, 1), fim: dia(ano, 12, 31), titulo: `Relatório anual — ${ano}` };
   if (periodo == null) return "Informe o período.";
+  if (tipo === "quinzenal") {
+    if (periodo < 1 || periodo > 12) return "Mês inválido.";
+    if (!g.quinzena) return "Escolha a quinzena.";
+    const [i, f] = g.quinzena === 1 ? [1, 15] : [16, ultimoDia(ano, periodo)];
+    return { ini: dia(ano, periodo, i), fim: dia(ano, periodo, f), titulo: `Relatório quinzenal — ${g.quinzena}ª quinzena de ${NOMES_MES[periodo - 1]}/${ano}` };
+  }
   if (tipo === "mensal") {
     if (periodo < 1 || periodo > 12) return "Mês inválido.";
     return { ini: dia(ano, periodo, 1), fim: dia(ano, periodo, ultimoDia(ano, periodo)), titulo: `Relatório mensal — ${NOMES_MES[periodo - 1]}/${ano}` };
@@ -128,7 +157,7 @@ relatoriosRouter.get("/", h(async (req, res) => {
 relatoriosRouter.post("/", h(async (req, res) => {
   const p = gerarSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: "Dados inválidos." });
-  const per = calcularPeriodo(p.data.tipo, p.data.ano, p.data.periodo);
+  const per = calcularPeriodo(p.data);
   if (typeof per === "string") return res.status(400).json({ error: per });
   const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
     const perfil = await carregarPerfil(c, req.auth!.sub);

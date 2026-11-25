@@ -18,27 +18,27 @@ export interface RelatorioReg {
   autor: { nome: string; email: string; cargo: string; telefone: string; empresa: string; matricula: string };
 }
 
-const COR = { escuro: "#0b0d14", laranja: "#ff6b00", texto: "#1f2937", suave: "#6b7280", zebra: "#f3f4f6", linha: "#d1d5db", ok: "#10b981", azul: "#3b82f6" };
-const M = { top: 100, bottom: 62, left: 40, right: 40 };
+export const COR = { escuro: "#0b0d14", laranja: "#ff6b00", texto: "#1f2937", suave: "#6b7280", zebra: "#f3f4f6", linha: "#d1d5db", ok: "#10b981", azul: "#3b82f6" };
+export const M = { top: 100, bottom: 62, left: 40, right: 40 };
 
-const fmtInt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-const fmtDec = (n: number, d = 2) => {
+export const fmtInt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+export const fmtDec = (n: number, d = 2) => {
   const [i, f] = Math.abs(n).toFixed(d).split(".");
   return (n < 0 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (f ? "," + f : "");
 };
-const fmtBRL = (n: number) => "R$ " + fmtDec(n, 2);
-const fmtDataBR = (iso: string) => { const d = String(iso).slice(0, 10).split("-"); return `${d[2]}/${d[1]}/${d[0]}`; };
-const fmtDataHora = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+export const fmtBRL = (n: number) => "R$ " + fmtDec(n, 2);
+export const fmtDataBR = (iso: string) => { const d = String(iso).slice(0, 10).split("-"); return `${d[2]}/${d[1]}/${d[0]}`; };
+export const fmtDataHora = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
 const NOME_TIPO_OC: Record<string, string> = { manutencao_solicitada: "Manutenção solicitada", sinistro: "Sinistro", avaria: "Avaria", acidente: "Acidente", multa: "Multa", outro: "Outro" };
 const NOME_STATUS_OC: Record<string, string> = { aberta: "Aberta", em_analise: "Em análise", aprovada: "Aprovada", rejeitada: "Rejeitada", resolvida: "Resolvida" };
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const rotuloMes = (ym: string) => { const [a, m] = ym.split("-"); return `${MESES[Number(m) - 1]}/${a.slice(2)}`; };
 
-type Doc = InstanceType<typeof PDFDocument>;
-const larguraUtil = (doc: Doc) => doc.page.width - M.left - M.right;
-const espaco = (doc: Doc, h: number) => { if (doc.y + h > doc.page.height - M.bottom) doc.addPage(); };
+export type Doc = InstanceType<typeof PDFDocument>;
+export const larguraUtil = (doc: Doc) => doc.page.width - M.left - M.right;
+export const espaco = (doc: Doc, h: number) => { if (doc.y + h > doc.page.height - M.bottom) doc.addPage(); };
 
-function secao(doc: Doc, titulo: string, minimo = 60) {
+export function secao(doc: Doc, titulo: string, minimo = 60) {
   espaco(doc, minimo);
   doc.moveDown(0.8);
   const y = doc.y;
@@ -48,12 +48,12 @@ function secao(doc: Doc, titulo: string, minimo = 60) {
   doc.x = M.left;
 }
 
-function nota(doc: Doc, texto: string) {
+export function nota(doc: Doc, texto: string) {
   doc.font("Helvetica").fontSize(9).fillColor(COR.suave).text(texto, M.left, doc.y, { width: larguraUtil(doc) });
   doc.moveDown(0.4);
 }
 
-function tabela(doc: Doc, cols: { t: string; w: number; r?: boolean }[], linhas: (string | number)[][]) {
+export function tabela(doc: Doc, cols: { t: string; w: number; r?: boolean }[], linhas: (string | number)[][]) {
   const total = cols.reduce((a, c) => a + c.w, 0);
   const esc = larguraUtil(doc) / total;
   const ws = cols.map((c) => c.w * esc);
@@ -79,7 +79,7 @@ function tabela(doc: Doc, cols: { t: string; w: number; r?: boolean }[], linhas:
   doc.moveDown(0.5);
 }
 
-function barras(doc: Doc, itens: { rotulo: string; valor: number; texto?: string }[], cor = COR.laranja) {
+export function barras(doc: Doc, itens: { rotulo: string; valor: number; texto?: string }[], cor = COR.laranja) {
   if (!itens.length) return;
   const max = Math.max(...itens.map((i) => i.valor), 1);
   const wRot = 130, wBar = larguraUtil(doc) - wRot - 90;
@@ -96,7 +96,7 @@ function barras(doc: Doc, itens: { rotulo: string; valor: number; texto?: string
   doc.moveDown(0.4);
 }
 
-function linha(doc: Doc, pts: { data: string; total: number }[]) {
+export function linha(doc: Doc, pts: { data: string; total: number }[]) {
   espaco(doc, 150);
   const W = larguraUtil(doc), H = 110, x0 = M.left + 34, y0 = doc.y + 6, w = W - 44;
   const vals = pts.map((p) => p.total);
@@ -118,7 +118,7 @@ function linha(doc: Doc, pts: { data: string; total: number }[]) {
   doc.x = M.left;
 }
 
-function kpis(doc: Doc, itens: { rotulo: string; valor: string }[]) {
+export function kpis(doc: Doc, itens: { rotulo: string; valor: string }[]) {
   const n = 4, gap = 10, w = (larguraUtil(doc) - gap * (n - 1)) / n, h = 52;
   for (let i = 0; i < itens.length; i += n) {
     espaco(doc, h + 10);
@@ -133,6 +133,47 @@ function kpis(doc: Doc, itens: { rotulo: string; valor: string }[]) {
     doc.y = y + h + 10;
   }
   doc.x = M.left;
+}
+
+// Cabeçalho (logo + título) e rodapé (autor, "Página X de Y") em TODAS as páginas.
+export function cabecalhoRodape(doc: Doc, titulo: string, autor: Autor, geradoEm: string, rodapeExtra: string) {
+  const logo = Buffer.from(LOGO_JPEG_B64, "base64");
+  const range = doc.bufferedPageRange();
+  for (let i = range.start; i < range.start + range.count; i++) {
+    doc.switchToPage(i);
+    const W = doc.page.width, Hh = doc.page.height;
+    const mb = doc.page.margins.bottom; doc.page.margins.bottom = 0;
+    doc.rect(0, 0, W, 78).fill(COR.escuro);
+    doc.rect(0, 78, W, 3).fill(COR.laranja);
+    const lw = 62 / LOGO_PROPORCAO > 150 ? 150 : 62 / LOGO_PROPORCAO;
+    doc.image(logo, M.left, 8, { width: lw, height: lw * LOGO_PROPORCAO });
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#ffffff").text("GESTÃO DE FROTA · RodaCoop", W - M.right - 250, 24, { width: 250, align: "right", lineBreak: false });
+    doc.font("Helvetica").fontSize(9).fillColor("#d1d5db").text(titulo, W - M.right - 250, 40, { width: 250, align: "right", lineBreak: false, ellipsis: true });
+    doc.moveTo(M.left, Hh - 46).lineTo(W - M.right, Hh - 46).lineWidth(0.5).strokeColor(COR.linha).stroke();
+    doc.font("Helvetica").fontSize(8).fillColor(COR.suave);
+    doc.text(`Gerado em ${fmtDataHora(geradoEm)} por ${autor.nome} — ${autor.cargo}, ${autor.empresa}`, M.left, Hh - 38, { width: W - M.left - M.right - 90, lineBreak: false, ellipsis: true });
+    doc.text(`Página ${i - range.start + 1} de ${range.count}`, W - M.right - 90, Hh - 38, { width: 90, align: "right", lineBreak: false });
+    doc.text(rodapeExtra, M.left, Hh - 26, { width: W - M.left - M.right, lineBreak: false, ellipsis: true });
+    doc.page.margins.bottom = mb;
+  }
+}
+
+export interface Autor { nome: string; email: string; cargo: string; telefone: string; empresa: string; matricula: string }
+
+// Documento A4 novo + título, subtítulo e caixa do responsável (primeira página).
+export function novoDocumento(titulo: string, subtitulo: string, autor: Autor): Doc {
+  const doc = new PDFDocument({ size: "A4", margins: M, bufferPages: true, info: { Title: titulo, Author: autor.nome, Subject: "GESTÃO DE FROTA — RodaCoop", Creator: "GESTÃO DE FROTA" } });
+  doc.font("Helvetica-Bold").fontSize(20).fillColor(COR.escuro).text(titulo, M.left, M.top - 6, { width: larguraUtil(doc) });
+  doc.font("Helvetica").fontSize(11).fillColor(COR.suave).text(subtitulo, { width: larguraUtil(doc) });
+  doc.moveDown(0.8);
+  const yAut = doc.y;
+  doc.roundedRect(M.left, yAut, larguraUtil(doc), 64, 6).lineWidth(0.8).strokeColor(COR.linha).stroke();
+  doc.font("Helvetica-Bold").fontSize(8.5).fillColor(COR.laranja).text("RESPONSÁVEL PELO RELATÓRIO", M.left + 12, yAut + 8, { lineBreak: false });
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(COR.escuro).text(autor.nome, M.left + 12, yAut + 21, { lineBreak: false });
+  doc.font("Helvetica").fontSize(9.5).fillColor(COR.texto).text(`${autor.cargo} · ${autor.empresa}`, M.left + 12, yAut + 36, { lineBreak: false });
+  doc.text(`${autor.email} · ${autor.telefone}${autor.matricula ? " · Matrícula " + autor.matricula : ""}`, M.left + 12, yAut + 49, { lineBreak: false });
+  doc.y = yAut + 76; doc.x = M.left;
+  return doc;
 }
 
 export function gerarPdf(rel: RelatorioReg): Doc {
@@ -213,25 +254,7 @@ export function gerarPdf(rel: RelatorioReg): Doc {
     tabela(doc, [{ t: "Situação", w: 2 }, { t: "Quantidade", w: 1, r: true }], d.ocorrencias.por_status.map((s) => [NOME_STATUS_OC[s.status] ?? s.status, s.total]));
   }
 
-  // ===== Cabeçalho e rodapé em todas as páginas =====
-  const range = doc.bufferedPageRange();
-  for (let i = range.start; i < range.start + range.count; i++) {
-    doc.switchToPage(i);
-    const W = doc.page.width, Hh = doc.page.height;
-    const mb = doc.page.margins.bottom; doc.page.margins.bottom = 0;
-    doc.rect(0, 0, W, 78).fill(COR.escuro);
-    doc.rect(0, 78, W, 3).fill(COR.laranja);
-    const lw = 62 / LOGO_PROPORCAO > 150 ? 150 : 62 / LOGO_PROPORCAO;
-    doc.image(logo, M.left, 8, { width: lw, height: lw * LOGO_PROPORCAO });
-    doc.font("Helvetica-Bold").fontSize(11).fillColor("#ffffff").text("GESTÃO DE FROTA · RodaCoop", W - M.right - 250, 24, { width: 250, align: "right", lineBreak: false });
-    doc.font("Helvetica").fontSize(9).fillColor("#d1d5db").text(rel.titulo, W - M.right - 250, 40, { width: 250, align: "right", lineBreak: false, ellipsis: true });
-    doc.moveTo(M.left, Hh - 46).lineTo(W - M.right, Hh - 46).lineWidth(0.5).strokeColor(COR.linha).stroke();
-    doc.font("Helvetica").fontSize(8).fillColor(COR.suave);
-    doc.text(`Gerado em ${fmtDataHora(rel.gerado_em)} por ${rel.autor.nome} — ${rel.autor.cargo}, ${rel.autor.empresa}`, M.left, Hh - 38, { width: W - M.left - M.right - 90, lineBreak: false, ellipsis: true });
-    doc.text(`Página ${i - range.start + 1} de ${range.count}`, W - M.right - 90, Hh - 38, { width: 90, align: "right", lineBreak: false });
-    doc.text("Documento gerado pela plataforma GESTÃO DE FROTA. Dados das bases " + d.bases.join(", ") + ".", M.left, Hh - 26, { width: W - M.left - M.right, lineBreak: false, ellipsis: true });
-    doc.page.margins.bottom = mb;
-  }
+  cabecalhoRodape(doc, rel.titulo, rel.autor, rel.gerado_em, "Documento gerado pela plataforma GESTÃO DE FROTA. Dados das bases " + d.bases.join(", ") + ".");
   doc.flushPages();
   return doc;
 }

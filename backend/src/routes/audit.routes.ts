@@ -24,18 +24,7 @@ async function requireAcessoAuditoria(req: Request, res: Response, next: NextFun
   if (req.auth.role === "superadmin") {
     return next();
   }
-  if (req.auth.role === "admin") {
-    const row = await pool.query(`SELECT acesso_auditoria FROM users WHERE id = $1`, [req.auth.sub]);
-    if (row.rows[0]?.acesso_auditoria) {
-      return next();
-    }
-    return res.status(403).json({
-      error:
-        "Seu usuário é admin mas ainda não tem acesso à auditoria. Peça a um superadmin para conceder " +
-        "em PATCH /api/users/:id/acesso-auditoria.",
-    });
-  }
-  return res.status(403).json({ error: "Papel sem acesso à auditoria." });
+  return res.status(403).json({ error: "A auditoria é restrita ao superadmin." });
 }
 
 auditRouter.use(requireAcessoAuditoria);

@@ -52,7 +52,7 @@ export default function App() {
           <Route
             path="auditoria"
             element={
-              <ProtectedRoute papeis={["superadmin", "admin"]}>
+              <ProtectedRoute papeis={["superadmin"]}>
                 <AuditoriaPage />
               </ProtectedRoute>
             }

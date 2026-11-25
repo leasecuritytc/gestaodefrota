@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import ExportarPdf from "../components/ExportarPdf";
 
 interface Pagina {
   id: string;
@@ -33,7 +34,7 @@ export default function BscPage() {
 
   return (
     <div>
-      <h1>BSC — Scorecard do fornecedor</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}><h1 style={{ margin: 0 }}>BSC — Scorecard do fornecedor</h1><ExportarPdf rota="/bsc/pdf" nome="bsc" /></div>
       <p className="subtitulo">
         Retratos do relatório "2.0 SRM - BSC Supplier" (Mercado Livre), coletados automaticamente e filtrados só para as bases {(dados?.bases ?? ["SMG3", "SMG5", "SMG9"]).join(", ")}. Visível apenas para superadmin e admin.
       </p>

@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from "crypto";
 import { z } from "zod";
 import { env } from "../env";
 import { withRole } from "../db";
+import { autorParaPdf, pdfBsc } from "../exportPdf";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { aplicarEscopo, normPlaca, repararDeep } from "../bscEscopo";
 
@@ -85,5 +86,38 @@ bscRouter.get("/", requireAuth, requireRole("superadmin", "admin"), async (req, 
   } catch (err: any) {
     console.error("BSC leitura falhou:", err?.code, err?.message);
     res.status(500).json({ error: "Falha ao ler os dados do BSC." });
+  }
+});
+
+// PDF do BSC por período: o último retrato de cada página coletado entre as datas.
+bscRouter.get("/pdf", requireAuth, requireRole("superadmin", "admin"), async (req, res) => {
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const de = String(req.query.de ?? ""), ate = String(req.query.ate ?? "");
+  if (!re.test(de) || !re.test(ate)) return res.status(400).json({ error: "Escolha a data inicial e a final." });
+  if (de > ate) return res.status(400).json({ error: "A data inicial não pode ser depois da final." });
+  try {
+    const out = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+      const aut = await autorParaPdf(c, req.auth!.sub);
+      if ("erro" in aut) return { erro: aut.erro, status: 409 };
+      const rows = (await c.query(
+        `SELECT DISTINCT ON (pagina) pagina, coletado_em, linhas, tabelas, numeros FROM bsc_snapshots
+          WHERE (coletado_em AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN $1::date AND $2::date
+          ORDER BY pagina, coletado_em DESC`, [de, ate])).rows;
+      return { autor: aut.autor, rows };
+    });
+    if ("erro" in out) return res.status(409).json({ error: out.erro, code: "perfil_incompleto" });
+    const placas = await placasDoEscopo();
+    const paginas = out.rows
+      .map((p: any) => ({ pagina: p.pagina, coletado_em: p.coletado_em, ...aplicarEscopo(repararDeep({ linhas: p.linhas, tabelas: p.tabelas, numeros: p.numeros }), placas) }))
+      .filter((p: any) => p.tabelas.length > 0 || p.numeros.length > 0);
+    if (!paginas.length) return res.status(404).json({ error: "Não há retrato do BSC coletado nesse período. Escolha outras datas." });
+    const doc = pdfBsc({ autor: out.autor, de, ate, bases: env.vec.bases, paginas });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="bsc_${de}_${ate}.pdf"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    doc.pipe(res); doc.end();
+  } catch (err: any) {
+    console.error("BSC pdf falhou:", err?.code, err?.message);
+    res.status(500).json({ error: "Falha ao gerar o PDF do BSC." });
   }
 });

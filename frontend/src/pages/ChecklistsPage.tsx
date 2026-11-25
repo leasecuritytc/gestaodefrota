@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ExportarPdf from "../components/ExportarPdf";
 import { api } from "../api";
 
 interface Linha {
@@ -47,7 +48,7 @@ export default function ChecklistsPage() {
 
   return (
     <div>
-      <h1>Checklists (VEC)</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}><h1 style={{ margin: 0 }}>Checklists (VEC)</h1><ExportarPdf rota="/checklists/pdf" nome="checklists_vec" params={{ q: q || undefined, falhas: soFalhas ? 1 : undefined }} deInicial={de} ateInicial={ate} /></div>
       <p className="subtitulo">
         Inspeções sincronizadas da VEC a cada 2 h. Visível apenas para superadmin e admin.
       </p>

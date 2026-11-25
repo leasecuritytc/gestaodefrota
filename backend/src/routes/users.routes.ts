@@ -17,11 +17,18 @@ usersRouter.get("/", async (req, res) => {
   const rows = await withRole(req.auth!.role, req.auth!.sub, (c) =>
     c.query(
       `SELECT id, email, full_name, role, active, email_confirmado, ativado_em, acesso_auditoria, created_at
-       FROM users ORDER BY created_at`
+       FROM users ${req.auth!.role === "superadmin" ? "" : "WHERE role <> 'superadmin'"} ORDER BY created_at`
     )
   );
-  res.json(rows.rows);
+  res.json(req.auth!.role === "superadmin" ? rows.rows : rows.rows.map(({ acesso_auditoria, ...r }: any) => r));
 });
+
+// Admin não enxerga nem altera superadmin.
+async function alvoEhSuperadmin(req: any, id: string): Promise<boolean> {
+  if (req.auth.role === "superadmin") return false;
+  const r = await withRole(req.auth.role, req.auth.sub, (c) => c.query(`SELECT role FROM users WHERE id = $1`, [id]));
+  return r.rows[0]?.role === "superadmin";
+}
 
 const ALL_ROLES = ["superadmin", "admin", "gestor_base", "leitor", "motorista"] as const;
 
@@ -175,6 +182,7 @@ usersRouter.post("/", async (req, res) => {
 // "esqueci minha senha" (POST /api/auth/esqueci-senha), não reenviar
 // convite.
 usersRouter.post("/:id/reenviar-convite", async (req, res) => {
+  if (await alvoEhSuperadmin(req, String(req.params.id))) return res.status(404).json({ error: "Usuário não encontrado." });
   try {
     const result = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
       const userRow = await c.query(
@@ -233,6 +241,7 @@ const updateSchema = z.object({
 });
 
 usersRouter.patch("/:id", async (req, res) => {
+  if (await alvoEhSuperadmin(req, String(req.params.id))) return res.status(404).json({ error: "Usuário não encontrado." });
   const parsed = updateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
