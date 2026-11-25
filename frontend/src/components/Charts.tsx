@@ -62,8 +62,41 @@ export function BarraEmpilhadaHorizontal({
   const porSerie = (s: string) => dados.reduce((n, d) => n + (d.series[s] ?? 0), 0);
   const seriesPresentes = seriesOrdem.filter((s) => porSerie(s) > 0);
 
+  const R = 54;
+  const C = 2 * Math.PI * R;
+  let desloc = 0;
+  const arcos = seriesPresentes.map((sr) => {
+    const len = totalGeral ? (porSerie(sr) / totalGeral) * C : 0;
+    const el = (
+      <circle key={sr} r={R} cx={70} cy={70} fill="none" stroke={corSerie(sr)} strokeWidth={20}
+        strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-desloc} transform="rotate(-90 70 70)">
+        <title>{sr}: {porSerie(sr)}</title>
+      </circle>
+    );
+    desloc += len;
+    return el;
+  });
+
   return (
     <div>
+      <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+        <svg width={140} height={140} viewBox="0 0 140 140" role="img" aria-label={`${totalGeral} veículos no total`}>
+          {arcos}
+          <text x={70} y={74} textAnchor="middle" fontSize={28} fontWeight={700} fill="var(--ink)">{totalGeral}</text>
+          <text x={70} y={92} textAnchor="middle" fontSize={11} fill="var(--muted)">veículos</text>
+        </svg>
+        <div style={{ flex: 1, minWidth: 190 }}>
+          {seriesPresentes.map((sr) => (
+            <div key={sr} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--grid)", fontSize: 13 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--ink)" }}>
+                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: corSerie(sr), display: "inline-block" }} />
+                {sr}
+              </span>
+              <span><strong>{porSerie(sr)}</strong> <span style={{ color: "var(--muted)" }}>({totalGeral ? Math.round((porSerie(sr) / totalGeral) * 100) : 0}%)</span></span>
+            </div>
+          ))}
+        </div>
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {dados.map((d, i) => (
           <div key={d.grupo} style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -92,12 +125,6 @@ export function BarraEmpilhadaHorizontal({
           </div>
         ))}
       </div>
-      <Legenda
-        itens={seriesPresentes.map((s) => ({
-          rotulo: `${s} ${porSerie(s)} (${totalGeral ? Math.round((porSerie(s) / totalGeral) * 100) : 0}%)`,
-          cor: corSerie(s),
-        }))}
-      />
     </div>
   );
 }
