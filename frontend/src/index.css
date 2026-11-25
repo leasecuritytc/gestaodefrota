@@ -831,3 +831,58 @@ code.copiavel {
 
 .insp-aviso { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid #f59e0b; background: rgba(245,158,11,0.12); font-size: 13px; color: var(--text); }
 .insp-aviso strong { color: #f59e0b; }
+
+/* ===== Navbar moderna (topbar) ===== */
+.topbar { position: sticky; top: 0; z-index: 1000; background: rgba(9, 9, 11, 0.86); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); color: #d4d4d8; border-bottom: 1px solid rgba(255, 255, 255, 0.07); transition: box-shadow .2s ease, background .2s ease; }
+.topbar.rolou { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); background: rgba(9, 9, 11, 0.94); }
+.faixa-fina { height: 4px; }
+.topbar-linha { display: flex; align-items: center; gap: 18px; padding: 0 22px; height: 64px; margin: 0; }
+.topbar-linha > *, .topbar * { margin-top: 0; }
+.topbar-marca { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; }
+.topbar-marca img { border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.45), 0 0 14px rgba(255, 107, 0, 0.25); }
+.topbar-marca-txt { display: flex; flex-direction: column; line-height: 1.15; }
+.topbar-marca strong { color: #fff; font-size: 15.5px; letter-spacing: 0.6px; }
+.topbar-marca small { color: #8d8d96; font-size: 11px; }
+.topbar-nav { flex: 1; display: flex; align-items: center; gap: 2px; justify-content: center; min-width: 0; }
+.nav-link { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9px; color: #b4b4bd; text-decoration: none; font-size: 13.5px; font-weight: 600; white-space: nowrap; background: none; border: none; cursor: pointer; font-family: inherit; transition: background .15s, color .15s; }
+.nav-link svg { flex-shrink: 0; opacity: 0.9; }
+.nav-link:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.nav-link.ativo { color: #fff; background: rgba(255, 107, 0, 0.14); }
+.nav-link.ativo svg { color: #ff8a33; }
+.topbar-nav > .nav-link.ativo::after, .nav-grupo > .nav-link.ativo::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -10px; height: 3px; border-radius: 3px 3px 0 0; background: linear-gradient(90deg, #ff6b00, #ffb300); }
+.nav-selo { background: #ef4444; color: #fff; font-size: 10.5px; line-height: 1; padding: 3px 6px; border-radius: 999px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.nav-seta { transition: transform .2s; }
+.nav-seta.aberta { transform: rotate(180deg); }
+.nav-grupo { position: relative; }
+.menu-suspenso { position: absolute; top: calc(100% + 10px); left: 0; min-width: 210px; background: rgba(18, 18, 21, 0.97); border: 1px solid #27272a; border-radius: 12px; padding: 6px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 2px; animation: menu-entra .14s ease-out; z-index: 1100; }
+@keyframes menu-entra { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.menu-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 8px; color: #d4d4d8; text-decoration: none; font-size: 13.5px; font-weight: 600; background: none; border: none; cursor: pointer; font-family: inherit; }
+.menu-item:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.menu-item.ativo { background: rgba(255, 107, 0, 0.14); color: #fff; }
+.topbar-direita { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+.icone-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04); color: #d4d4d8; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.icone-btn:hover { background: rgba(255, 107, 0, 0.16); border-color: rgba(255, 107, 0, 0.5); color: #ffb300; }
+.usuario-menu { position: relative; }
+.usuario-btn { display: flex; align-items: center; gap: 10px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04); color: #fff; cursor: pointer; font-family: inherit; }
+.usuario-btn:hover { border-color: rgba(255, 107, 0, 0.5); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #ff6b00, #ffb300); color: #111; font-weight: 800; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.usuario-txt { display: flex; flex-direction: column; text-align: left; line-height: 1.15; max-width: 160px; }
+.usuario-txt strong { color: #fff; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-txt small { color: #8d8d96; font-size: 11px; }
+.menu-usuario { left: auto; right: 0; min-width: 240px; }
+.menu-usuario-topo { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; border-bottom: 1px solid #27272a; margin-bottom: 4px; }
+.menu-usuario-topo strong { color: #fff; font-size: 14px; }
+.menu-usuario-topo small { color: #8d8d96; font-size: 12px; word-break: break-all; }
+.chip-papel { align-self: flex-start; margin-top: 6px; padding: 2px 9px; border-radius: 999px; background: rgba(255, 107, 0, 0.16); color: #ffb300; font-size: 11px; font-weight: 700; }
+.topbar-hamb { display: none; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04); color: #fff; cursor: pointer; }
+.gaveta { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px 14px; border-top: 1px solid rgba(255, 255, 255, 0.07); max-height: calc(100vh - 70px); overflow-y: auto; animation: menu-entra .16s ease-out; }
+.gaveta-item { width: 100%; padding: 12px; font-size: 15px; }
+.topbar a:focus-visible, .topbar button:focus-visible { outline: 2px solid #ffb300; outline-offset: 2px; }
+@media (max-width: 1180px) { .topbar-marca-txt small { display: none; } .usuario-txt { display: none; } .usuario-btn { padding: 4px; } }
+@media (max-width: 980px) {
+  .topbar-nav { display: none; }
+  .topbar-hamb { display: inline-flex; }
+  .topbar-linha { padding: 0 14px; gap: 12px; }
+}
+@media (min-width: 981px) { .gaveta { display: none; } }
+@media (max-width: 420px) { .topbar-marca-txt strong { font-size: 13px; } }
