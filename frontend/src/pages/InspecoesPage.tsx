@@ -6,8 +6,8 @@ type Resultado = "OK" | "FALHA" | "NA";
 interface Item { id: string; categoria: string; texto: string; critico: boolean; ordem: number }
 interface Veic { id: string; placa: string; base: string; tipo: string | null; status: string; chassi: string | null; rentadora: string | null; ultimo_km: string | null; ultimo_proprio: string | null; ultimo_vec: string | null; estado_vec: string | null; vencido: boolean; rascunho_id: string | null }
 interface Linha { id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; ocorrencia_id: string | null; executor: string | null }
-interface FotoMeta { id: string; item_id: string | null; mime: string; tamanho: number }
-interface Detalhe { id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; observacoes: string | null; ocorrencia_id: string | null; executor: string | null; respostas: { item_id: string; resultado: Resultado; observacao: string | null }[]; fotos: FotoMeta[] }
+interface FotoMeta { id: string; item_id: string | null; tipo: "odometro" | "item" | "geral"; mime: string; tamanho: number }
+interface Detalhe { km_minimo: number | null; id: string; placa: string; base: string; data_hora: string; km: string | null; status: "Rascunho" | "Concluido"; num_falhas: number; observacoes: string | null; ocorrencia_id: string | null; executor: string | null; respostas: { item_id: string; resultado: Resultado; observacao: string | null }[]; fotos: FotoMeta[] }
 
 const fmtData = (v: string | null) => (v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
 const CIDADES: Record<string, string> = { SMG3: "Pouso Alegre/MG", SMG5: "Poços de Caldas/MG", SMG9: "Varginha/MG" };
@@ -60,6 +60,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
   const [ocupado, setOcupado] = useState(false);
   const refArq = useRef<HTMLInputElement>(null);
   const itemFoto = useRef<string | null>(null);
+  const tipoFoto = useRef<"odometro" | "item" | "geral">("geral");
 
   const carregar = useCallback(async () => {
     const r = await api.get<Detalhe>(`/checklists-proprios/${id}`);
@@ -77,6 +78,16 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
     itens.forEach((i) => m.set(i.categoria, [...(m.get(i.categoria) ?? []), i]));
     return [...m.entries()];
   }, [itens]);
+
+  const fotoOdo = det?.fotos.find((f) => f.tipo === "odometro");
+  const kmNum = km === "" ? null : Number(km);
+  const kmBaixo = kmNum != null && det?.km_minimo != null && kmNum < det.km_minimo;
+  const podeConcluir = respondidos >= itens.length && kmNum != null && !kmBaixo && !!fotoOdo;
+  const pendencias = [
+    respondidos < itens.length ? `${itens.length - respondidos} item(ns) sem resposta` : null,
+    kmNum == null ? "informe a quilometragem" : kmBaixo ? "quilometragem menor que a anterior" : null,
+    !fotoOdo ? "foto do odômetro" : null,
+  ].filter(Boolean);
 
   const corpo = () => ({
     km: km === "" ? null : Number(km),
@@ -106,7 +117,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
     setOcupado(true); setMsg(null);
     try {
       const blob = await comprimir(file);
-      const q = itemFoto.current ? `?item_id=${itemFoto.current}` : "";
+      const q = tipoFoto.current === "odometro" ? "?tipo=odometro" : itemFoto.current ? `?item_id=${itemFoto.current}` : "";
       await api.post(`/checklists-proprios/${id}/fotos${q}`, blob, { headers: { "Content-Type": "image/jpeg" } });
       await carregar();
     } catch (e) { setMsg({ tipo: "erro", texto: (e as Error).message.startsWith("Foto muito") ? (e as Error).message : mensagemErro(e, "Não foi possível enviar a foto.") }); }
@@ -129,9 +140,17 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
       </p>
       {msg && <div className={msg.tipo === "erro" ? "erro" : "sucesso"} role="status" aria-live="polite">{msg.texto}</div>}
       <div className="painel">
-        <label className="insp-km">Quilometragem (km)
-          <input type="number" inputMode="numeric" min={0} value={km} disabled={leitura} onChange={(e) => setKm(e.target.value)} />
+        <h2>Odômetro</h2>
+        <label className="insp-km">Quilometragem (km) *
+          <input type="number" inputMode="numeric" min={det.km_minimo ?? 0} value={km} disabled={leitura} onChange={(e) => setKm(e.target.value)} aria-invalid={kmBaixo} />
         </label>
+        {det.km_minimo != null && <small className="insp-sub">Último km lançado: {det.km_minimo.toLocaleString("pt-BR")} km. Não é permitido informar valor menor.</small>}
+        {kmBaixo && <div className="erro" role="alert" style={{ marginTop: 8 }}>Quilometragem menor que a já lançada ({det.km_minimo!.toLocaleString("pt-BR")} km). Confira o odômetro.</div>}
+        <div className="insp-fotos" style={{ marginTop: 12 }}>
+          <strong style={{ fontSize: 13 }}>Foto do odômetro (obrigatória) *</strong>
+          {fotoOdo && <Foto key={fotoOdo.id} id={fotoOdo.id} onRemover={leitura ? undefined : () => removerFoto(fotoOdo.id)} />}
+          {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "odometro"; refArq.current?.click(); }}>{fotoOdo ? "📷 Trocar foto" : "📷 Fotografar odômetro"}</button>}
+        </div>
       </div>
       {grupos.map(([cat, lista]) => (
         <div className="painel" key={cat}>
@@ -160,7 +179,7 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
                       onChange={(e) => setResp({ ...resp, [i.id]: { ...r, observacao: e.target.value } })} />
                     <div className="insp-fotos">
                       {fotos.map((f) => <Foto key={f.id} id={f.id} onRemover={leitura ? undefined : () => removerFoto(f.id)} />)}
-                      {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = i.id; refArq.current?.click(); }}>📷 Adicionar foto</button>}
+                      {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = i.id; tipoFoto.current = "item"; refArq.current?.click(); }}>📷 Adicionar foto</button>}
                     </div>
                   </div>
                 )}
@@ -173,16 +192,16 @@ function Formulario({ id, itens, somenteLeitura, onVoltar }: { id: string; itens
         <h2>Observações gerais e fotos gerais</h2>
         <textarea className="insp-obs" rows={3} maxLength={2000} value={obs} disabled={leitura} onChange={(e) => setObs(e.target.value)} placeholder="Opcional" />
         <div className="insp-fotos">
-          {det.fotos.filter((f) => !f.item_id).map((f) => <Foto key={f.id} id={f.id} onRemover={leitura ? undefined : () => removerFoto(f.id)} />)}
-          {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; refArq.current?.click(); }}>📷 Adicionar foto</button>}
+          {det.fotos.filter((f) => f.tipo === "geral").map((f) => <Foto key={f.id} id={f.id} onRemover={leitura ? undefined : () => removerFoto(f.id)} />)}
+          {!leitura && <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={() => { itemFoto.current = null; tipoFoto.current = "geral"; refArq.current?.click(); }}>📷 Adicionar foto</button>}
         </div>
       </div>
       <input ref={refArq} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void enviarFoto(f); }} />
       {!leitura && (
         <div className="insp-rodape">
-          <span>{respondidos}/{itens.length} itens</span>
+          <span>{respondidos}/{itens.length} itens{pendencias.length > 0 && <small className="insp-sub"> · falta: {pendencias.join("; ")}</small>}</span>
           <button type="button" className="btn btn-secundario" disabled={ocupado} onClick={salvar}>Salvar rascunho</button>
-          <button type="button" className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || respondidos < itens.length} onClick={concluir}>Concluir</button>
+          <button type="button" className="btn btn-primario" style={{ width: "auto" }} disabled={ocupado || !podeConcluir} onClick={concluir}>Concluir</button>
         </div>
       )}
     </div>
@@ -375,8 +394,10 @@ export default function InspecoesPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Inspecionar {alvo.placa}</h2>
             <p className="subtitulo">{alvo.base} · {alvo.tipo ?? "Tipo não informado"}{alvo.rentadora ? ` · ${alvo.rentadora}` : ""}</p>
-            <div className="campo"><label>Quilometragem atual (km)</label><input type="number" inputMode="numeric" min={0} autoFocus value={kmNovo} onChange={(e) => setKmNovo(e.target.value)} /></div>
-            <div className="acoes"><button className="btn btn-secundario" onClick={() => setAlvo(null)}>Cancelar</button><button className="btn btn-primario" style={{ width: "auto" }} disabled={criando} onClick={() => iniciar(alvo, kmNovo)}>Começar inspeção</button></div>
+            <div className="campo"><label>Quilometragem atual (km)</label><input type="number" inputMode="numeric" min={alvo.ultimo_km ? Number(alvo.ultimo_km) : 0} autoFocus value={kmNovo} onChange={(e) => setKmNovo(e.target.value)} />
+              {alvo.ultimo_km && <small className="insp-sub">Último km lançado: {Number(alvo.ultimo_km).toLocaleString("pt-BR")} km (não pode ser menor).</small>}
+              {kmNovo !== "" && alvo.ultimo_km && Number(kmNovo) < Number(alvo.ultimo_km) && <div className="erro" role="alert">Menor que o km já lançado.</div>}</div>
+            <div className="acoes"><button className="btn btn-secundario" onClick={() => setAlvo(null)}>Cancelar</button><button className="btn btn-primario" style={{ width: "auto" }} disabled={criando || (kmNovo !== "" && !!alvo.ultimo_km && Number(kmNovo) < Number(alvo.ultimo_km))} onClick={() => iniciar(alvo, kmNovo)}>Começar inspeção</button></div>
           </div>
         </div>
       )}

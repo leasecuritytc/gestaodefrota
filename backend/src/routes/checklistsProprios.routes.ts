@@ -99,8 +99,9 @@ async function carregar(c: PoolClient, id: string) {
   );
   if (!ex.rows[0]) return null;
   const resp = await c.query(`SELECT item_id, resultado, observacao FROM checklist_respostas WHERE execucao_id = $1`, [id]);
-  const fotos = await c.query(`SELECT id, item_id, mime, tamanho FROM checklist_fotos WHERE execucao_id = $1 ORDER BY created_at`, [id]);
-  return { ...ex.rows[0], respostas: resp.rows, fotos: fotos.rows };
+  const fotos = await c.query(`SELECT id, item_id, tipo, mime, tamanho FROM checklist_fotos WHERE execucao_id = $1 ORDER BY created_at`, [id]);
+  const km_minimo = await kmMinimo(c, ex.rows[0].vehicle_id, id);
+  return { ...ex.rows[0], km_minimo, respostas: resp.rows, fotos: fotos.rows };
 }
 
 checklistsProprioRouter.get("/:id", LEITURA, h(async (req, res) => {
@@ -109,6 +110,16 @@ checklistsProprioRouter.get("/:id", LEITURA, h(async (req, res) => {
   if (!out) return res.status(404).json({ error: "Checklist não encontrado." });
   res.json(out);
 }));
+
+// Maior km já lançado em checklist concluído do veículo (outro que não o próprio).
+async function kmMinimo(c: PoolClient, vehicleId: string, excluirId?: string): Promise<number | null> {
+  const r = await c.query(
+    `SELECT max(km) AS km FROM checklist_execucoes WHERE vehicle_id = $1 AND status = 'Concluido' AND ($2::uuid IS NULL OR id <> $2::uuid)`,
+    [vehicleId, excluirId ?? null]
+  );
+  return r.rows[0].km == null ? null : Number(r.rows[0].km);
+}
+const msgKm = (min: number) => `Quilometragem menor que a já lançada anteriormente (${min.toLocaleString("pt-BR")} km). Confira o odômetro.`;
 
 const criarSchema = z.object({ vehicle_id: z.string().uuid(), km: z.coerce.number().min(0).max(5_000_000).optional() });
 
@@ -126,6 +137,10 @@ checklistsProprioRouter.post("/", ESCRITA, h(async (req, res) => {
       [veic.id]
     );
     if (existente.rows[0]) return { erro: 409, msg: "Já existe checklist deste veículo hoje.", existente_id: existente.rows[0].id };
+    if (p.data.km != null) {
+      const min = await kmMinimo(c, veic.id);
+      if (min != null && p.data.km < min) return { erro: 400, msg: msgKm(min) };
+    }
     const ins = await c.query(
       `INSERT INTO checklist_execucoes (vehicle_id, base, executado_por, km) VALUES ($1, $2, $3, $4) RETURNING id`,
       [veic.id, veic.base, req.auth!.sub, p.data.km ?? null]
@@ -146,7 +161,12 @@ const salvarSchema = z.object({
   })).max(200),
 });
 
-async function salvar(c: PoolClient, id: string, d: z.infer<typeof salvarSchema>) {
+async function salvar(c: PoolClient, id: string, d: z.infer<typeof salvarSchema>): Promise<string | null> {
+  if (d.km != null) {
+    const v = await c.query(`SELECT vehicle_id FROM checklist_execucoes WHERE id = $1`, [id]);
+    const min = await kmMinimo(c, v.rows[0].vehicle_id, id);
+    if (min != null && d.km < min) return msgKm(min);
+  }
   await c.query(`UPDATE checklist_execucoes SET km = coalesce($2, km), observacoes = $3 WHERE id = $1`, [id, d.km ?? null, d.observacoes ?? null]);
   for (const r of d.respostas) {
     await c.query(
@@ -155,6 +175,7 @@ async function salvar(c: PoolClient, id: string, d: z.infer<typeof salvarSchema>
       [id, r.item_id, r.resultado, r.observacao?.trim() || null]
     );
   }
+  return null;
 }
 
 async function statusDe(c: PoolClient, id: string) {
@@ -168,10 +189,14 @@ checklistsProprioRouter.put("/:id", ESCRITA, h(async (req, res) => {
   if (!z.string().uuid().safeParse(id).success || !p.success) return res.status(400).json({ error: "Dados inválidos." });
   const st = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
     const s = await statusDe(c, id);
-    if (s === "Rascunho") await salvar(c, id, p.data);
+    if (s === "Rascunho") {
+      const e = await salvar(c, id, p.data);
+      if (e) return "ERRO:" + e;
+    }
     return s;
   });
   if (!st) return res.status(404).json({ error: "Checklist não encontrado." });
+  if (st.startsWith("ERRO:")) return res.status(400).json({ error: st.slice(5) });
   if (st !== "Rascunho") return res.status(409).json({ error: "Checklist concluído não pode ser alterado." });
   res.json({ ok: true });
 }));
@@ -185,7 +210,8 @@ checklistsProprioRouter.post("/:id/concluir", ESCRITA, h(async (req, res) => {
     const s = await statusDe(c, id);
     if (!s) return { erro: 404, msg: "Checklist não encontrado." };
     if (s !== "Rascunho") return { erro: 409, msg: "Checklist já concluído." };
-    await salvar(c, id, p.data);
+    const eSalvar = await salvar(c, id, p.data);
+    if (eSalvar) return { erro: 400, msg: eSalvar };
 
     const itens = (await c.query(`SELECT id, texto, critico FROM checklist_itens WHERE ativo`)).rows;
     const resp = new Map((await c.query(`SELECT item_id, resultado, observacao FROM checklist_respostas WHERE execucao_id = $1`, [id])).rows.map((r) => [r.item_id, r]));
@@ -196,9 +222,10 @@ checklistsProprioRouter.post("/:id/concluir", ESCRITA, h(async (req, res) => {
 
     const ex = (await c.query(`SELECT vehicle_id, km, data_hora FROM checklist_execucoes WHERE id = $1`, [id])).rows[0];
     if (ex.km == null) return { erro: 400, msg: "Informe a quilometragem." };
-    const ant = await c.query(`SELECT max(km) AS km FROM checklist_execucoes WHERE vehicle_id = $1 AND status = 'Concluido'`, [ex.vehicle_id]);
-    if (ant.rows[0].km != null && Number(ex.km) < Number(ant.rows[0].km))
-      return { erro: 400, msg: `Quilometragem menor que a do último checklist (${Number(ant.rows[0].km)} km).` };
+    const min = await kmMinimo(c, ex.vehicle_id, id);
+    if (min != null && Number(ex.km) < min) return { erro: 400, msg: msgKm(min) };
+    const odo = await c.query(`SELECT count(*)::int AS n FROM checklist_fotos WHERE execucao_id = $1 AND tipo = 'odometro'`, [id]);
+    if (odo.rows[0].n < 1) return { erro: 400, msg: "Anexe a foto do odômetro (painel mostrando a quilometragem) para concluir." };
 
     const falhas = itens.filter((i) => resp.get(i.id).resultado === "FALHA");
     const criticas = falhas.filter((i) => i.critico);
@@ -230,6 +257,8 @@ checklistsProprioRouter.post("/:id/fotos", ESCRITA, corpoImagem, h(async (req, r
   const id = req.params.id as string;
   const mime = (req.headers["content-type"] ?? "").split(";")[0];
   const itemId = typeof req.query.item_id === "string" ? req.query.item_id : null;
+  const tipo = req.query.tipo === "odometro" ? "odometro" : itemId ? "item" : "geral";
+  if (tipo === "odometro" && itemId) return res.status(400).json({ error: "Dados inválidos." });
   if (!z.string().uuid().safeParse(id).success || (itemId && !z.string().uuid().safeParse(itemId).success))
     return res.status(400).json({ error: "Dados inválidos." });
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: "Envie uma imagem JPEG, PNG ou WebP." });
@@ -237,11 +266,12 @@ checklistsProprioRouter.post("/:id/fotos", ESCRITA, corpoImagem, h(async (req, r
     const s = await statusDe(c, id);
     if (!s) return { erro: 404, msg: "Checklist não encontrado." };
     if (s !== "Rascunho") return { erro: 409, msg: "Checklist concluído não aceita novas fotos." };
+    if (tipo === "odometro") await c.query(`DELETE FROM checklist_fotos WHERE execucao_id = $1 AND tipo = 'odometro'`, [id]); // mantém só a mais recente
     const n = await c.query(`SELECT count(*)::int AS n FROM checklist_fotos WHERE execucao_id = $1`, [id]);
     if (n.rows[0].n >= 40) return { erro: 400, msg: "Limite de 40 fotos por checklist." };
     const r = await c.query(
-      `INSERT INTO checklist_fotos (execucao_id, item_id, mime, tamanho, dados, enviado_por) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [id, itemId, mime, req.body.length, req.body, req.auth!.sub]
+      `INSERT INTO checklist_fotos (execucao_id, item_id, tipo, mime, tamanho, dados, enviado_por) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [id, itemId, tipo, mime, req.body.length, req.body, req.auth!.sub]
     );
     return { id: r.rows[0].id as string };
   });
