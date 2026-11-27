@@ -64,9 +64,7 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
     c.query(
       `INSERT INTO maintenance_records
          (placa, base, tipo, descricao, oficina, data_entrada, data_saida, custo, previsao_saida, status, source, source_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
-               CASE WHEN $7 IS NOT NULL THEN 'Concluída' ELSE 'Em andamento' END,
-               'manual', gen_random_uuid()::text)
+       VALUES ($1,$2,$3,$4,$5,$6::date,$7::date,$8,$9::date,$10,'manual', gen_random_uuid()::text)
        RETURNING *`,
       [
         m.placa.toUpperCase(),
@@ -78,6 +76,7 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
         m.data_saida ?? null,
         m.custo,
         m.previsao_saida ?? null,
+        m.data_saida ? "Concluída" : "Em andamento",
       ]
     )
   );
@@ -88,10 +87,12 @@ maintenanceRouter.post("/", requireRole("superadmin", "admin", "gestor_base"), a
 // Decisão do dono do projeto (24/11/2026): CRUD completo é só admin/superadmin
 // — mais restrito que o registro inicial (que já inclui gestor_base).
 const updateSchema = z.object({
+  base: z.string().min(1).max(10).optional(),
+  data_entrada: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   tipo: z.enum(["Preventiva", "Corretiva", "Outros"]).optional(),
   descricao: z.string().nullable().optional(),
   oficina: z.string().nullable().optional(),
-  data_saida: z.string().nullable().optional(),
+  data_saida: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   previsao_saida: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   custo: z.number().min(0).optional(),
   status: z.enum(["Em andamento", "Concluída", "Cancelada"]).optional(),
@@ -142,6 +143,21 @@ maintenanceRouter.patch("/:id", requireRole("superadmin", "admin"), async (req, 
     if (err.httpStatus) {
       return res.status(err.httpStatus).json({ error: err.message });
     }
+    if (err.code === "23514") {
+      return res.status(400).json({ error: "Datas inconsistentes: a saída (real ou prevista) não pode ser anterior à entrada." });
+    }
     throw err;
   }
+});
+
+// Exclusão: só admin/superadmin. Guarda o registro apagado na auditoria.
+maintenanceRouter.delete("/:id", requireRole("superadmin", "admin"), async (req, res) => {
+  const apagado = await withRole(req.auth!.role, req.auth!.sub, async (c) => {
+    const r = await c.query(`DELETE FROM maintenance_records WHERE id = $1 RETURNING *`, [req.params.id]);
+    if (!r.rows[0]) return null;
+    await registrarAuditoria(c, req.auth!.sub, "excluir_manutencao", "maintenance_records", req.params.id, { registro: r.rows[0] });
+    return r.rows[0];
+  });
+  if (!apagado) return res.status(404).json({ error: "Manutenção não encontrada (talvez já tenha sido excluída)." });
+  res.json({ ok: true });
 });
